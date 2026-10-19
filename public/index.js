@@ -14,6 +14,22 @@ document.addEventListener('DOMContentLoaded', () => {
   initPrivacyModal();
 });
 
+setInterval(async () => {
+    try {
+      const menuRes = await fetch('/api/menu');
+      if (menuRes.ok) {
+        allMenuItems = await menuRes.json();
+        filterAndRenderMenu(
+          document.getElementById('menu-search') ? document.getElementById('menu-search').value.toLowerCase().trim() : '',
+          getCurrentActiveCategory()
+        );
+      }
+      initStoreStatusAndHours();
+    } catch (err) {
+      // Silent catch for background polling
+    }
+  }, 10000);
+;
 /* ===========================================================================
    1. NAVBAR & NAVIGATION (STICKY ACTIVE LINK HIGHLIGHTING & SMOOTH SCROLL)
    =========================================================================== */
@@ -437,14 +453,16 @@ function renderMenuItems(items) {
 
 function getBadgeHTML(badge) {
   if (!badge) return '';
-  if (badge === 'signature') {
+  const rawBadge = badge.toString().toLowerCase().trim();
+  
+  if (rawBadge === 'signature') {
     return `
       <span class="card-badge" title="Cafe Signature">
         <i class="fa-solid fa-heart badge-signature-icon"></i>
       </span>
     `;
   }
-  if (badge === 'favorite') {
+  if (rawBadge === 'favorite') {
     return `
       <span class="card-badge" title="Customer Favorite">
         <i class="fa-solid fa-star badge-favorite-icon"></i>
@@ -509,14 +527,18 @@ function openItemDetailModal(itemId) {
   if (desc) desc.textContent = item.description || 'No description available.';
 
   if (badge) {
-    if (item.badge === 'signature') {
+    const rawBadge = (item.badge || '').toString().toLowerCase().trim();
+    if (rawBadge === 'signature') {
       badge.className = 'item-detail-badge';
       badge.innerHTML = '<i class="fa-solid fa-heart badge-signature-icon"></i> Cafe Signature';
-    } else if (item.badge === 'favorite') {
+      badge.classList.remove('hide');
+    } else if (rawBadge === 'favorite') {
       badge.className = 'item-detail-badge';
       badge.innerHTML = '<i class="fa-solid fa-star badge-favorite-icon"></i> Customer Favorite';
+      badge.classList.remove('hide');
     } else {
       badge.className = 'item-detail-badge hide';
+      badge.innerHTML = '';
     }
   }
 
@@ -747,6 +769,8 @@ function hidePromoMsg() {
   if (promoMsg) promoMsg.classList.add('hide');
 }
 
+let voucherStatusInterval = null;
+
 function displayDigitalTicket(code, expiresAt) {
   const ticket = document.getElementById('digital-ticket');
   const codeDisplay = document.getElementById('ticket-code-display');
@@ -771,6 +795,7 @@ function displayDigitalTicket(code, expiresAt) {
     if (remaining <= 0) {
       clearInterval(voucherTimerInterval);
       if (timerDisplay) timerDisplay.textContent = 'EXPIRED';
+      if (voucherStatusInterval) clearInterval(voucherStatusInterval);
       return;
     }
 
@@ -781,8 +806,26 @@ function displayDigitalTicket(code, expiresAt) {
       timerDisplay.textContent = `Countdown: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
   }, 1000);
-}
 
+  // 🔄 BACKGROUND POLLING: Check the server every 5 seconds to see if the cashier redeemed this ticket
+  if (voucherStatusInterval) clearInterval(voucherStatusInterval);
+  voucherStatusInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/promo-codes/status/${code}`);
+      const data = await res.json();
+      if (data.success && data.status === 'Redeemed') {
+        if (timerDisplay) {
+          timerDisplay.textContent = 'STATUS: REDEEMED SUCCESSFULLY! 🎉';
+          timerDisplay.style.color = '#2e7d32';
+        }
+        if (voucherTimerInterval) clearInterval(voucherTimerInterval);
+        clearInterval(voucherStatusInterval);
+      }
+    } catch (err) {
+      // Silent catch for background checks
+    }
+  }, 5000);
+}
 /* ===========================================================================
    8. PRIVACY & TERMS MODAL
    =========================================================================== */

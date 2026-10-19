@@ -14,6 +14,26 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAdminSession();
     setCurrentDate();
     initEodFormDate();
+
+    // 🔄 AUTOMATIC BACKGROUND POLLING (Every 10 seconds)
+    setInterval(() => {
+        // Only refresh if the user is logged in and active
+        if (currentUser) {
+            loadDashboardData();
+            
+            // If viewing active vouchers tab, refresh it
+            const activeVouchersPane = document.getElementById('promo-subtab-active');
+            if (activeVouchersPane && activeVouchersPane.style.display !== 'none') {
+                loadActiveVouchers();
+            }
+
+            // If viewing inventory, refresh it
+            const inventoryPane = document.getElementById('tab-inventory');
+            if (inventoryPane && inventoryPane.style.display !== 'none') {
+                loadInventoryItems();
+            }
+        }
+    }, 10000); // 10000 ms = 10 seconds
 });
 
 function filterMenuCatalogCategory(cat, btn) {
