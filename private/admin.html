@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <title>Executive Manager Portal - Cafe de Melle</title>
+    <link rel="stylesheet" href="/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Mobile Top Navigation Bar -->
+    <div class="mobile-nav-bar">
+        <div class="mobile-brand">
+            <img src="/images/Logo.jpg" alt="Cafe Logo" onerror="this.src='/images/Logo.jpg'">
+            <span>Cafe de Melle</span>
+        </div>
+        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Toggle Menu"><i class="fa-solid fa-bars"></i></button>
+    </div>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <img src="/images/Logo.jpg" alt="Cafe Logo" class="mobile-brand-logo" onerror="this.src='/images/Logo.jpg'">
+            <h2>
+                Cafe de Melle
+                <span class="subtitle">Executive Manager Portal</span>
+            </h2>
+        </div>
+
+        <ul class="sidebar-menu">
+            <li id="nav-item-dashboard" class="active" onclick="switchTab('dashboard', this)">
+                <i class="fa-solid fa-gauge-high"></i> Dashboard
+            </li>
+
+            <li onclick="switchTab('cashier', this)">
+                <i class="fa-solid fa-ticket"></i> Cashier Promo
+            </li>
+            <li onclick="switchTab('inventory', this)">
+                <i class="fa-solid fa-boxes-stacked"></i> Inventory & Supply
+            </li>
+            <li onclick="switchTab('invoices', this)">
+                <i class="fa-solid fa-book-open-reader"></i> Operational Ledgers
+            </li>
+            <li onclick="switchTab('menu', this)">
+                <i class="fa-solid fa-utensils"></i> Menu Catalog
+            </li>
+            <li onclick="switchTab('banners', this)">
+                <i class="fa-solid fa-image"></i> Hero Banners
+            </li>
+            <li onclick="switchTab('settings', this)">
+                <i class="fa-solid fa-clock"></i> Store Hours
+            </li>
+            <li onclick="switchTab('audit', this)">
+                <i class="fa-solid fa-shield-halved"></i> Audit Logs
+            </li>
+            <li onclick="switchTab('account', this)">
+                <i class="fa-solid fa-user-gear"></i> Security & Roles
+            </li>
+        </ul>
+
+        <button class="logout-btn" onclick="logoutAdmin()">
+            <i class="fa-solid fa-right-from-bracket"></i> Log Out
+        </button>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- Header Bar -->
+        <div class="header-bar">
+            <div>
+                <h1 id="tab-title">Operational Dashboard</h1>
+                <p id="current-date" style="color: #666; font-size: 0.9rem; margin-top: 4px;"></p>
+            </div>
+            <div>
+                <span id="active-user-badge" class="badge-protected">
+                    <i class="fa-solid fa-user-check"></i> Session Active
+                </span>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             UNIFIED OPERATIONAL & EXECUTIVE COMMAND DASHBOARD
+             =================================================================== -->
+        <section id="tab-dashboard" class="tab-section active">
+            
+            <!-- 1. Digital Storefront Health Sensor & Inventory Exception Line -->
+            <div class="sensor-guardrail-card">
+                <div class="sensor-header">
+                    <div class="sensor-title">
+                        <i class="fa-solid fa-heart-pulse"></i> Digital Storefront Health Sensor
+                    </div>
+                    <div id="commander-store-sensor-badge" class="pulsing-health-badge live">
+                        <span class="pulse-dot"></span> LIVE &amp; ACCEPTING ORDERS
+                    </div>
+                </div>
+                <div id="commander-inventory-exception-line" class="inventory-exception-line stable">
+                    <i class="fa-solid fa-circle-check"></i> All supply lines fully stable
+                </div>
+            </div>
+
+            <!-- 2. 10-Second Financial Matrix (Role-Aware for Owner/Developer) -->
+            <div id="executive-financial-matrix-row" class="financial-matrix-grid">
+                <div class="matrix-kpi-tile">
+                    <div class="matrix-icon-wrapper"><i class="fa-solid fa-peso-sign"></i></div>
+                    <div class="matrix-tile-body">
+                        <div class="matrix-tile-title">Today's Revenue Pulse</div>
+                        <div class="matrix-tile-value" id="matrix-revenue-pulse">₱0.00</div>
+                        <div class="matrix-tile-subtext">Aggregated from daily POS transaction feeds</div>
+                    </div>
+                </div>
+
+                <div class="matrix-kpi-tile promo-tile">
+                    <div class="matrix-icon-wrapper"><i class="fa-solid fa-tags"></i></div>
+                    <div class="matrix-tile-body">
+                        <div class="matrix-tile-title">Active Promo Marketing Cost</div>
+                        <div class="matrix-tile-value" id="matrix-promo-cost">₱0.00</div>
+                        <div class="matrix-tile-subtext">Valuation of unclaimed active voucher codes</div>
+                    </div>
+                </div>
+
+                <div class="matrix-kpi-tile bleed-tile">
+                    <div class="matrix-icon-wrapper"><i class="fa-solid fa-arrow-trend-down"></i></div>
+                    <div class="matrix-tile-body">
+                        <div class="matrix-tile-title">Total Operational Money Bleed</div>
+                        <div class="matrix-tile-value" id="matrix-money-bleed">₱0.00</div>
+                        <div class="matrix-tile-subtext">Sum of invoice shortages &amp; daily spillage</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Store Diagnostics KPIs -->
+            <div class="kpi-tier-label">
+                <i class="fa-solid fa-chart-line"></i> Store Diagnostics
+            </div>
+            <div class="kpi-grid" style="margin-top: 15px;">
+                <div class="kpi-card">
+                    <h3>Total Catalog Items</h3>
+                    <div class="number" id="kpi-total">0</div>
+                </div>
+                <div class="kpi-card">
+                    <h3>Available Items</h3>
+                    <div class="number" id="kpi-active">0</div>
+                </div>
+                <div class="kpi-card" style="border-left-color: var(--danger);">
+                    <h3>Out of Stock</h3>
+                    <div class="number" id="kpi-out" style="color: var(--danger);">0</div>
+                </div>
+                <div class="kpi-card" style="border-left-color: var(--gold);">
+                    <h3>Active Vouchers</h3>
+                    <div class="number" id="kpi-vouchers-redeemed" style="color: var(--chocolate);">0</div>
+                </div>
+                <div class="kpi-card" style="border-left-color: var(--danger);">
+                    <h3>Supply Warnings</h3>
+                    <div class="number" id="kpi-inventory-alerts" style="color: var(--danger);">0</div>
+                </div>
+            </div>
+
+            <!-- 4. Analytics & Previews Split View (Top 3 Popular Items & Pinned Hero Banner Preview) -->
+            <div class="split-dashboard-row">
+                <div class="panel-card" style="margin-bottom: 0;">
+                    <h2><i class="fa-solid fa-fire"></i> Top 3 Most Popular Menu Items</h2>
+                    <div id="commander-popular-items" class="popular-items-list"></div>
+                </div>
+
+                <div class="panel-card" style="margin-bottom: 0;">
+                    <h2><i class="fa-solid fa-bullhorn"></i> Pinned Hero Banner Preview</h2>
+                    <div id="commander-hero-banner-preview"></div>
+                </div>
+            </div>
+
+            <!-- 5. Operational Logs, Restock Checklists & Security Accountability Tracker -->
+            <div class="dashboard-main-grid" style="margin-top: 25px;">
+                <div class="panel-card">
+                    <h2><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity Log</h2>
+                    <div id="dashboard-activity-feed" class="activity-feed-scroll"></div>
+                </div>
+
+                <div class="panel-card">
+                    <h2><i class="fa-solid fa-truck-ramp-box"></i> Stock Restock Checklist</h2>
+                    <div id="dashboard-reorder-checklist" class="reorder-list-scroll"></div>
+                </div>
+            </div>
+
+            <div class="micro-tracker-card owner-dev-only">
+                <h2 style="color:var(--primary); font-size:1.15rem; margin-bottom:4px;">
+                    <i class="fa-solid fa-shield-cat"></i> System Security Accountability Tracker
+                </h2>
+                <p style="font-size:0.83rem; color:#666;">Real-time frontend humanized audit logs</p>
+                <div id="commander-micro-security-tracker" class="micro-tracker-list"></div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             CASHIER PROMO VERIFICATION TAB
+             =================================================================== -->
+        <section id="tab-cashier" class="tab-section">
+    <!-- Verification Box -->
+    <div class="panel-card">
+        <h2><i class="fa-solid fa-ticket"></i> Verify &amp; Redeem Customer Voucher</h2>
+        <div class="form-group" style="max-width: 400px;">
+            <label for="promo-code-input">Enter Voucher Code:</label>
+            <input type="text" id="promo-code-input" placeholder="e.g., MELLE-1234" style="text-transform: uppercase;">
+        </div>
+        <button class="btn-action btn-redeem" onclick="verifyAndRedeemCode()">
+            <i class="fa-solid fa-check-double"></i> Verify &amp; Redeem
+        </button>
+        <div id="cashier-promo-msg" class="status-msg"></div>
+    </div>
+
+    <!-- Sub-tab Selector -->
+    <div class="sub-tab-bar" style="margin-bottom: 20px;">
+        <button class="sub-tab-btn active" id="btn-promo-active" onclick="switchPromoSubTab('active', this)">
+            <i class="fa-solid fa-clock"></i> Currently Active Claimed Vouchers
+        </button>
+        <button class="sub-tab-btn" id="btn-promo-history" onclick="switchPromoSubTab('history', this)">
+            <i class="fa-solid fa-clock-rotate-left"></i> Redeemed Promo History Ledger
+        </button>
+    </div>
+
+    <!-- Pane 1: Active Claimed Vouchers -->
+    <div id="promo-subtab-active" class="sub-tab-pane active">
+        <div class="panel-card">
+            <h2><i class="fa-solid fa-list-check"></i> Currently Active Unredeemed Vouchers</h2>
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Voucher Code</th>
+                            <th>Customer Name</th>
+                            <th>Social Handle</th>
+                            <th>Contact Number</th>
+                            <th>Claimed Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="active-vouchers-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pane 2: Redeemed Promo History Ledger -->
+    <div id="promo-subtab-history" class="sub-tab-pane" style="display:none;">
+        <div class="panel-card">
+            <h2><i class="fa-solid fa-file-invoice-dollar"></i> Promo Voucher Redemption History</h2>
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Voucher Code</th>
+                            <th>Customer Name</th>
+                            <th>Social Handle</th>
+                            <th>Claimed Date</th>
+                            <th>Redeemed Date</th>
+                            <th>Redeemed By (Cashier / Staff)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-vouchers-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+        <!-- ===================================================================
+             INVENTORY & SUPPLY TAB
+             =================================================================== -->
+        <section id="tab-inventory" class="tab-section">
+            <div class="sub-tab-bar">
+                <button class="sub-tab-btn active" onclick="switchInventorySubTab('overview', this)">
+                    <i class="fa-solid fa-boxes-stacked"></i> Container Overview
+                </button>
+                <button id="btn-subtab-ops" class="sub-tab-btn" onclick="switchInventorySubTab('ops', this)">
+                    <i class="fa-solid fa-hand-holding-hand"></i> Supply Operations
+                </button>
+                <button class="sub-tab-btn" onclick="switchInventorySubTab('register', this)">
+                    <i class="fa-solid fa-box-archive"></i> Register Container
+                </button>
+                <button class="sub-tab-btn" onclick="switchInventorySubTab('eod', this)">
+                    <i class="fa-solid fa-receipt"></i> Daily EOD Shift Closeout
+                </button>
+            </div>
+
+            <div id="inv-subtab-overview" class="sub-tab-pane active">
+                <div class="panel-card">
+                    <h2><i class="fa-solid fa-warehouse"></i> Registered Bulk Containers</h2>
+                    <div class="table-responsive">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Container Name</th>
+                                    <th>Unit Type</th>
+                                    <th>In Stock</th>
+                                    <th>Safety Threshold</th>
+                                    <th>Linked Menu Item</th>
+                                    <th>Unit Cost</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="inv-subtab-ops" class="sub-tab-pane">
+                <div class="ops-pill-group">
+                    <button id="btn-ops-stockin" class="btn-filter-pill active" onclick="switchOpsForm('stockin')">
+                        <i class="fa-solid fa-truck-field"></i> Log Stock Shipment (Stock In)
+                    </button>
+                    <button id="btn-ops-audit" class="btn-filter-pill" onclick="switchOpsForm('audit')">
+                        <i class="fa-solid fa-clipboard-check"></i> Shift Evening Audit
+                    </button>
+                    <button id="btn-ops-waste" class="btn-filter-pill" onclick="switchOpsForm('waste')">
+                        <i class="fa-solid fa-dumpster-fire"></i> Log Spillage / Wastage
+                    </button>
+                </div>
+
+                <div id="ops-form-stockin" class="ops-form-wrapper panel-card">
+                    <h2><i class="fa-solid fa-truck-ramp-box"></i> Log Stock Shipment</h2>
+                    <form id="form-ops-stockin" onsubmit="submitStockIn(event)">
+                        <div class="form-group">
+    <label>Target Inventory Container:</label>
+    <div class="custom-dropdown" id="stockin-inventory-dropdown">
+        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+            <span class="dropdown-selected-text">-- Select Bulk Container Item --</span>
+            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </div>
+        <div class="dropdown-menu" id="stockin-inventory-menu-options" style="max-height: 220px; overflow-y: auto;">
+            <!-- Dynamically populated via admin.js -->
+        </div>
+        <input type="hidden" id="stockin-inventory-id" required>
+    </div>
+</div>
+                        <div class="form-group">
+                            <label>Supplier Name:</label>
+                            <input type="text" id="stockin-supplier" required placeholder="e.g., San Miguel Dairy Corp">
+                        </div>
+                        <div class="form-group">
+                            <label>Invoice Number:</label>
+                            <input type="text" id="stockin-invoice-num" placeholder="e.g., INV-9982">
+                        </div>
+                        <div class="form-group">
+                            <label>Invoiced Quantity:</label>
+                            <input type="number" id="stockin-invoice-qty" required min="1" placeholder="e.g., 20">
+                        </div>
+                        <div class="form-group">
+                            <label>Actual Received Quantity:</label>
+                            <input type="number" id="stockin-received-qty" required min="0" placeholder="e.g., 20">
+                        </div>
+                        <div class="form-group">
+                            <label>Unit Cost (₱):</label>
+                            <input type="number" step="0.01" id="stockin-unit-cost" required min="0" placeholder="e.g., 85.00">
+                        </div>
+                        <button type="submit" class="btn-action"><i class="fa-solid fa-plus"></i> Submit Shipment</button>
+                    </form>
+                </div>
+
+                <div id="ops-form-audit" class="ops-form-wrapper panel-card" style="display:none;">
+                    <h2><i class="fa-solid fa-clipboard-check"></i> End of Shift Evening Audit</h2>
+                    <form id="form-ops-audit" onsubmit="submitEveningAudit(event)">
+                        <div class="form-group">
+    <label>Target Container Item:</label>
+    <div class="custom-dropdown" id="audit-inventory-dropdown">
+        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+            <span class="dropdown-selected-text">-- Select Bulk Container Item --</span>
+            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </div>
+        <div class="dropdown-menu" id="audit-inventory-menu-options" style="max-height: 220px; overflow-y: auto;">
+            <!-- Dynamically populated via admin.js -->
+        </div>
+        <input type="hidden" id="audit-inventory-id" required>
+    </div>
+</div>
+                        <div class="form-group">
+    <label>Shift Period:</label>
+    <div class="custom-pill-selector">
+        <button type="button" class="pill-btn active" onclick="selectShiftPeriodPill('Closing', this)">Evening Closing Shift</button>
+        <button type="button" class="pill-btn" onclick="selectShiftPeriodPill('Midday', this)">Midday Shift Change</button>
+    </div>
+    <input type="hidden" id="audit-shift" value="Closing">
+</div>
+                        <div class="form-group">
+                            <label>Physically Counted Stock:</label>
+                            <input type="number" id="audit-actual-stock" required min="0" placeholder="e.g., 14">
+                        </div>
+                        <div class="form-group">
+                            <label>Audit Notes / Remarks:</label>
+                            <input type="text" id="audit-notes" placeholder="e.g., Regular closing reconciliation">
+                        </div>
+                        <button type="submit" class="btn-action"><i class="fa-solid fa-floppy-disk"></i> Save Shift Audit</button>
+                    </form>
+                </div>
+
+                <div id="ops-form-waste" class="ops-form-wrapper panel-card" style="display:none;">
+                    <h2><i class="fa-solid fa-dumpster-fire"></i> Log Spillage / Loss Incident</h2>
+                    <form id="form-ops-waste" onsubmit="submitWastageLog(event)">
+                        <div class="form-group">
+    <label>Target Container Item:</label>
+    <div class="custom-dropdown" id="waste-inventory-dropdown">
+        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+            <span class="dropdown-selected-text">-- Select Bulk Container Item --</span>
+            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </div>
+        <div class="dropdown-menu" id="waste-inventory-menu-options" style="max-height: 220px; overflow-y: auto;">
+            <!-- Dynamically populated via admin.js -->
+        </div>
+        <input type="hidden" id="waste-inventory-id" required>
+    </div>
+</div>
+                        <div class="form-group">
+                            <label>Quantity Lost:</label>
+                            <input type="number" id="waste-qty" required min="1" placeholder="e.g., 2">
+                        </div>
+                        <div class="form-group">
+    <label>Reason Code:</label>
+    <div class="custom-pill-selector">
+        <button type="button" class="pill-btn active" onclick="selectWasteReasonPill('SPILLAGE', this)">Accidental Spillage</button>
+        <button type="button" class="pill-btn" onclick="selectWasteReasonPill('EXPIRATION', this)">Expired / Spoiled</button>
+        <button type="button" class="pill-btn" onclick="selectWasteReasonPill('DAMAGE', this)">Damaged Packaging</button>
+    </div>
+    <input type="hidden" id="waste-reason" value="SPILLAGE">
+</div>
+                        <div class="form-group">
+                            <label>Logged By (Reporter):</label>
+                            <input type="text" id="waste-reporter" placeholder="e.g., Barista John">
+                        </div>
+                        <div class="form-group">
+                            <label>Incident Details:</label>
+                            <input type="text" id="waste-notes" placeholder="Describe how the loss occurred">
+                        </div>
+                        <button type="submit" class="btn-action btn-danger"><i class="fa-solid fa-circle-exclamation"></i> Log Wastage</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="inv-subtab-register" class="sub-tab-pane">
+    <div class="panel-card">
+        <h2><i class="fa-solid fa-box-archive"></i> Register New Bulk Container</h2>
+        <form id="form-register-container" onsubmit="registerNewInventoryContainer(event)">
+            <div class="form-group">
+                <label>Container Item Name:</label>
+                <input type="text" id="new-inv-name" required placeholder="e.g., Oat Milk Carton Box" oninput="autoCapitalize(this)">
+            </div>
+            
+            <div class="form-group">
+                <label>Container Unit Type:</label>
+                <div class="custom-dropdown" id="unit-type-dropdown">
+                    <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                        <span class="dropdown-selected-text">-- Select Standard Unit Type --</span>
+                        <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                    </div>
+                    <div class="dropdown-menu" style="max-height: 220px; overflow-y: auto;">
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Bottles', 'new-inv-unit')">Bottles</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Boxes', 'new-inv-unit')">Boxes</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Bags', 'new-inv-unit')">Bags</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Trays', 'new-inv-unit')">Trays</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Pieces', 'new-inv-unit')">Pieces</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Reams', 'new-inv-unit')">Reams</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Packages', 'new-inv-unit')">Packages</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Cans', 'new-inv-unit')">Cans</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Kilos', 'new-inv-unit')">Kilos</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Liters', 'new-inv-unit')">Liters</div>
+                    </div>
+                    <input type="hidden" id="new-inv-unit" required>
+                </div>
+            </div>
+
+            
+
+            <!-- ADDED: Linked Menu Item Dropdown -->
+            <div class="form-group">
+                <label>Linked Menu Item (Triggers Kill-Switch when Stock = 0):</label>
+                <div class="custom-dropdown" id="new-inv-menu-dropdown">
+                    <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                        <span class="dropdown-selected-text">-- None (Unlinked) --</span>
+                        <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                    </div>
+                    <div class="dropdown-menu" id="new-inv-menu-options" style="max-height: 220px; overflow-y: auto;">
+                        <!-- Populated via admin.js -->
+                    </div>
+                    <input type="hidden" id="new-inv-menu-id" value="">
+                </div>
+            </div>
+                        <div class="form-group">
+                            <label>Initial Stock Quantity:</label>
+                            <input type="number" id="new-inv-qty" value="10" min="0" placeholder="e.g., 10">
+                        </div>
+                        <div class="form-group">
+                            <label>Safety Threshold Limit:</label>
+                            <input type="number" id="new-inv-threshold" value="3" min="1" placeholder="e.g., 3">
+                        </div>
+                        <div class="form-group">
+                            <label>Default Unit Cost (₱):</label>
+                            <input type="number" step="0.01" id="new-inv-cost" value="0.00" min="0" placeholder="e.g., 150.00">
+                        </div>
+                        <button type="submit" class="btn-action"><i class="fa-solid fa-plus"></i> Register Container</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="inv-subtab-eod" class="sub-tab-pane">
+                <div class="panel-card">
+                    <h2><i class="fa-solid fa-receipt"></i> Daily EOD Shift Closeout</h2> 
+
+                    <form id="form-eod-closeout" onsubmit="interceptEodCloseout(event)">
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-bottom:15px;">
+                            <div class="form-group">
+                                <label for="shift-close-date">Shift Date:</label>
+                                <input type="date" id="shift-close-date" required onchange="onEodDateChanged()">
+                            </div>
+                            <div class="form-group">
+                                <label for="shift-pos-total">Total POS Sales (₱):</label>
+                                <input type="number" step="0.01" id="shift-pos-total" placeholder="e.g., 12500.00" required min="0" oninput="updateEodLiveTally()">
+                            </div>
+                            <div class="form-group">
+                                <label for="shift-discount-amount">Shift Discounts Deducted (₱):</label>
+                                <input type="number" step="0.01" id="shift-discount-amount" placeholder="e.g., 250.00" value="0.00" min="0" oninput="updateEodLiveTally()">
+                            </div>
+                        </div>
+
+                        <!-- EOD Search & Category Filter Pills -->
+                        <div class="menu-toolbelt" style="margin-bottom: 15px;">
+                            <div class="menu-search-wrapper">
+                                <i class="fa-solid fa-magnifying-glass" style="color:var(--secondary);"></i>
+                                <input type="text" id="eod-search-input" placeholder="Search menu items for shift log..." onkeyup="filterEodMenuGrid()">
+                            </div>
+                            <div class="filter-pill-group" id="eod-category-pills">
+                                <button type="button" class="btn-filter-pill active" onclick="filterEodByCategory('All', this)">All Items</button>
+                                <button type="button" class="btn-filter-pill" onclick="filterEodByCategory('Hot Coffee', this)">Hot Coffee</button>
+                                <button type="button" class="btn-filter-pill" onclick="filterEodByCategory('Iced Coffee', this)">Iced Coffee</button>
+                                <button type="button" class="btn-filter-pill" onclick="filterEodByCategory('Non-Coffee', this)">Non-Coffee</button>
+                                <button type="button" class="btn-filter-pill" onclick="filterEodByCategory('Pastries', this)">Pastries</button>
+                                <button type="button" class="btn-filter-pill" onclick="filterEodByCategory('Fruit Sodas', this)">Fruit Sodas</button>
+                            </div>
+                        </div>
+
+                        <!-- EOD Live Shift Tally Card -->
+                        <div class="eod-live-tally-card" style="background:var(--alt-bg); border:1px solid var(--light-accent); border-radius:10px; padding:16px; margin-bottom:15px;">
+                            <h3 style="font-size:1.05rem; color:var(--primary); margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-calculator"></i> EOD Live Shift Tally
+                            </h3>
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; font-size:0.9rem;">
+                                <div><strong>Total Units Sold:</strong> <span id="tally-total-units">0</span></div>
+                                <div><strong>Calculated Gross:</strong> <span id="tally-gross-rev">₱0.00</span></div>
+                                <div><strong>Net Sales (Gross - Disc):</strong> <span id="tally-net-sales" style="color:var(--primary); font-weight:800;">₱0.00</span></div>
+                                <div><strong>Drink Breakdown:</strong> <span id="tally-drinks-qty">0</span> units</div>
+                                <div><strong>Pastry Breakdown:</strong> <span id="tally-pastries-qty">0</span> units</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="font-size: 0.95rem; font-weight: 700; color: var(--primary); margin-bottom: 8px;">
+                                <i class="fa-solid fa-basket-shopping"></i> Daily Itemized Sales Log (Units Sold Today):
+                            </label>
+                            <div id="eod-menu-items-grid" class="eod-items-grid-scroll"></div>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+                            <button type="submit" class="btn-action" style="flex: 1 1 auto;">
+                                <i class="fa-solid fa-file-signature"></i> Execute Shift Closeout &amp; Update Inventory
+                            </button>
+                            <button type="button" class="btn-action" style="background-color: var(--bronze-accent);" onclick="openMasterTicketModal()">
+                                <i class="fa-solid fa-print"></i> Generate Daily Master Audit Ticket
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             OPERATIONAL LEDGERS TAB
+             =================================================================== -->
+        <section id="tab-invoices" class="tab-section">
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-book-open-reader"></i> Operational Ledgers</h2>
+                <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
+                    Comprehensive audit ledgers tracking supplier shipments, stock-out variances, spillage losses, and shift closeout histories.
+                </p>
+
+                <!-- Sub-tab Navigation for Ledgers -->
+                <div class="sub-tab-bar" style="margin-bottom: 20px;">
+                    <button class="sub-tab-btn active" onclick="switchLedgerSubTab('shipments', this)">
+                        <i class="fa-solid fa-truck-ramp-box"></i> Supplier Shipments (Stock In)
+                    </button>
+                    <button class="sub-tab-btn" onclick="switchLedgerSubTab('spillage', this)">
+                        <i class="fa-solid fa-dumpster-fire"></i> Stock-Out &amp; Spillage Logs
+                    </button>
+                    <button class="sub-tab-btn" onclick="switchLedgerSubTab('closeouts', this)">
+                        <i class="fa-solid fa-receipt"></i> Daily EOD Closeout History
+                    </button>
+                </div>
+
+                <!-- Sub-Section 1: Supplier Shipments (Stock In) -->
+                <div id="ledger-subtab-shipments" class="ledger-sub-pane active" style="display:block;">
+                    <div class="ledger-toolbar">
+                        <div class="date-range-container">
+                            <input type="date" id="invoice-date-filter" onchange="loadSupplierInvoices()">
+                            <input type="text" id="invoice-supplier-filter" placeholder="Search by supplier..." onkeyup="loadSupplierInvoices()">
+                        </div>
+                        <div class="filter-pill-group">
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('shipments')">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                                <i class="fa-solid fa-print"></i> Print / PDF
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice #</th>
+                                    <th>Supplier</th>
+                                    <th>Container Item</th>
+                                    <th>Quantities</th>
+                                    <th>Unit Cost</th>
+                                    <th>Verification Status</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoices-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-Section 2: Stock-Out & Spillage Logs -->
+                <div id="ledger-subtab-spillage" class="ledger-sub-pane" style="display:none;">
+                    <div class="ledger-toolbar">
+                        <div class="date-range-container">
+                            <label style="font-size:0.82rem; font-weight:700;">From:</label>
+                            <input type="date" id="spillage-start-date" onchange="loadWastageLogs()">
+                            <label style="font-size:0.82rem; font-weight:700;">To:</label>
+                            <input type="date" id="spillage-end-date" onchange="loadWastageLogs()">
+                            <label style="font-size:0.82rem; font-weight:700;">Type:</label>
+                            <div class="custom-pill-selector" style="display:inline-flex; vertical-align:middle;">
+    <button type="button" class="pill-btn active" onclick="filterSpillageTypePill('ALL', this)">All Adjustments</button>
+    <button type="button" class="pill-btn" onclick="filterSpillageTypePill('SPILLAGE', this)">Spillage / Wastage</button>
+    <button type="button" class="pill-btn" onclick="filterSpillageTypePill('AUDIT', this)">Stock-Out Audits</button>
+</div>
+<input type="hidden" id="spillage-type-filter" value="ALL">
+                            <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearSpillageFilters()">
+                                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+                            </button>
+                        </div>
+                        <div class="filter-pill-group">
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('spillage')">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                                <i class="fa-solid fa-print"></i> Print / PDF
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type / Item</th>
+                                    <th>Quantity / Details</th>
+                                    <th>Reason Code</th>
+                                    <th>Unit Cost</th>
+                                    <th>Financial Loss</th>
+                                    <th>Logged By</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="spillage-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-Section 3: Daily EOD Closeout History -->
+                <div id="ledger-subtab-closeouts" class="ledger-sub-pane" style="display:none;">
+                    <div class="ledger-toolbar">
+                        <div class="date-range-container">
+                            <label style="font-size:0.82rem; font-weight:700;">From:</label>
+                            <input type="date" id="closeout-start-date" onchange="loadCloseoutHistory()">
+                            <label style="font-size:0.82rem; font-weight:700;">To:</label>
+                            <input type="date" id="closeout-end-date" onchange="loadCloseoutHistory()">
+                        </div>
+                        <div class="filter-pill-group">
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('closeouts')">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                                <i class="fa-solid fa-print"></i> Print / PDF
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Closeout ID</th>
+                                    <th>Shift Date</th>
+                                    <th>Gross Sales</th>
+                                    <th>Discounts</th>
+                                    <th>Net Sales Amount</th>
+                                    <th>Logged By</th>
+                                    <th>Itemized Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="closeouts-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             MENU CATALOG MANAGEMENT TAB
+             =================================================================== -->
+        <section id="tab-menu" class="tab-section">
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-plus"></i> Add New Menu Item</h2>
+                <form id="add-menu-form" onsubmit="handleAddMenuItem(event)">
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px;">
+                        <div class="form-group">
+                            <label>Item Name:</label>
+                            <input type="text" name="name" required placeholder="e.g., Iced Matcha Latte" oninput="autoCapitalize(this)">
+                        </div>
+                        <div class="form-group">
+    <label>Category:</label>
+    <div class="custom-dropdown" id="category-dropdown">
+        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+            <span class="dropdown-selected-text">Hot Coffee</span>
+            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+        </div>
+        <div class="dropdown-menu">
+            <div class="dropdown-option active" onclick="selectCustomOption(this, 'Hot Coffee')">Hot Coffee</div>
+            <div class="dropdown-option" onclick="selectCustomOption(this, 'Cold Coffee')">Iced Coffee</div>
+            <div class="dropdown-option" onclick="selectCustomOption(this, 'Non-Coffee')">Non-Coffee</div>
+            <div class="dropdown-option" onclick="selectCustomOption(this, 'Pastries')">Pastries</div>
+            <div class="dropdown-option" onclick="selectCustomOption(this, 'Fruit Sodas')">Fruit Sodas</div>
+        </div>
+        <input type="hidden" name="category" value="Hot Coffee">
+    </div>
+</div>
+                        <div class="form-group">
+                            <label>Price (₱):</label>
+                            <input type="number" name="price" required min="1" placeholder="e.g., 140">
+                        </div>
+                       <div class="form-group">
+    <label>Badge Highlight:</label>
+    <div class="custom-pill-selector" id="badge-pill-group">
+        <button type="button" class="pill-btn active" data-value="none" onclick="selectBadge('none', this)">None</button>
+        <button type="button" class="pill-btn" data-value="signature" onclick="selectBadge('signature', this)">
+            <i class="fa-solid fa-heart" style="color:var(--primary);"></i> Cafe Signature
+        </button>
+        <button type="button" class="pill-btn" data-value="favorite" onclick="selectBadge('favorite', this)">
+            <i class="fa-solid fa-star" style="color:var(--gold);"></i> Customer Favorite
+        </button>
+    </div>
+    <!-- Hidden input to retain form submission compatibility -->
+    <input type="hidden" name="badge" id="selected-badge-input" value="none">
+</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description:</label>
+                        <textarea name="description" rows="2" placeholder="Item details, flavor profiles, and ingredients..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Item Photo:</label>
+                        <input type="file" name="image" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn-action"><i class="fa-solid fa-cloud-arrow-up"></i> Add to Menu</button>
+                </form>
+            </div>
+
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-utensils"></i> Active Menu Catalog</h2>
+                <div class="menu-toolbelt">
+                    <div class="menu-search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass" style="color:var(--secondary);"></i>
+                        <input type="text" id="menu-catalog-search" placeholder="Search menu catalog..." onkeyup="filterAndSortMenuCatalog()">
+                    </div>
+                    <div class="filter-pill-group" id="menu-catalog-category-pills">
+                        <button type="button" class="btn-filter-pill active" onclick="filterMenuCatalogCategory('All', this)">All</button>
+                        <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Hot Coffee', this)">Hot Coffee</button>
+                        <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Iced Coffee', this)">Iced Coffee</button>
+                        <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Non-Coffee', this)">Non-Coffee</button>
+                        <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Pastries', this)">Pastries</button>
+                        <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Fruit Sodas', this)">Fruit Sodas</button>
+                    </div>
+                    <div class="date-range-container">
+                        <select id="menu-catalog-sort" onchange="filterAndSortMenuCatalog()">
+                            <option value="views">Sort: Highest Views</option>
+                            <option value="alpha">Sort: Alphabetical (A-Z)</option>
+                            <option value="price-asc">Sort: Price: Low to High</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Image</th>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Views</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="menu-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             HERO BANNERS TAB
+             =================================================================== -->
+        <section id="tab-banners" class="tab-section">
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-upload"></i> Upload Hero Visual Slide</h2>
+                <form id="upload-hero-form" onsubmit="handleUploadHeroSlide(event)">
+                    <div class="form-group">
+                        <label>Banner Tag:</label>
+                        <input type="text" name="tag" placeholder="e.g., SPECIAL OFFER">
+                    </div>
+                    <div class="form-group">
+                        <label>Headline Title:</label>
+                        <input type="text" name="title" required placeholder="e.g., Try Our New Spanish Latte">
+                    </div>
+                    <div class="form-group">
+                        <label>Subtitle / Description:</label>
+                        <input type="text" name="subtitle" placeholder="e.g., Crafted with fresh espresso &amp; sweet condensed milk">
+                    </div>
+                    <div class="form-group">
+                        <label>Banner Image (JPG, PNG, WEBP):</label>
+                        <input type="file" name="image" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn-action"><i class="fa-solid fa-image"></i> Upload Banner</button>
+                </form>
+            </div>
+
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-images"></i> Active Hero Banners</h2>
+                <div id="hero-slides-list"></div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             STORE HOURS TAB (OVERHAULED UX)
+             =================================================================== -->
+        <section id="tab-settings" class="tab-section">
+            <div class="panel-card">
+                <!-- 1. LIVE STATUS INDICATOR CHIP -->
+                <div style="margin-bottom: 20px;">
+                    <div id="storefront-live-status-chip" class="pulsing-health-badge live">
+                        <span class="pulse-dot"></span> Storefront Live &amp; Online
+                    </div>
+                </div>
+
+                <h2><i class="fa-solid fa-clock"></i> Store Operating Hours &amp; Status Configuration</h2>
+                
+                <form id="store-settings-form" onsubmit="saveStoreSettings(event)">
+                    <!-- 4. COMPACT INPUT ALIGNMENT (Dual-Column Desktop / Vertical Mobile) -->
+                    <div class="settings-grid-dual">
+                        <div class="form-group">
+                            <label>Opening Time:</label>
+                            <input type="time" id="setting-open-time" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Closing Time:</label>
+                            <input type="time" id="setting-close-time" required>
+                        </div>
+                    </div>
+
+                  <div class="form-group">
+    <label>Manual Status Override:</label>
+    <div class="custom-pill-selector" id="store-status-pill-group">
+        <button type="button" class="pill-btn active" onclick="selectStoreStatusPill('AUTO', this)">Automated Schedule</button>
+        <button type="button" class="pill-btn" onclick="selectStoreStatusPill('FORCE_OPEN', this)">Force Storefront OPEN</button>
+        <button type="button" class="pill-btn" onclick="selectStoreStatusPill('FORCE_CLOSED', this)">Force Storefront CLOSED</button>
+    </div>
+    <input type="hidden" id="setting-store-status" value="AUTO">
+</div>
+
+                    <hr style="border:0; border-top:1px solid var(--light-accent); margin: 25px 0;">
+
+                    <!-- 2. TIMED BLOCK CLOSURE FIELDS -->
+                    <div style="background-color: var(--alt-bg); padding: 18px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid var(--chocolate);">
+                        <h3 style="color: var(--chocolate); font-size: 1.05rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-calendar-xmark"></i> Schedule Temporary Closure (Private Event / Emergency)
+                        </h3>
+                        <div class="settings-grid-dual">
+                            <div class="form-group">
+                                <label>Event Start Date / Time:</label>
+                                <input type="datetime-local" id="setting-closure-start" onchange="updateStoreStatusPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label>Event End Date / Time:</label>
+                                <input type="datetime-local" id="setting-closure-end" onchange="updateStoreStatusPreview()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. PUBLIC BANNER SYNC MESSAGE BOX -->
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-bullhorn"></i> Storefront Closure Announcement Message:</label>
+                        <textarea id="setting-notice-message" rows="3" placeholder="Enter closure announcement to forward directly to the public-facing storefront landing page banner..."></textarea>
+                        <small style="color: #666; font-size: 0.8rem; margin-top: 4px;">Forwarded instantly to online visitors when an override or temporary block is active.</small>
+                    </div>
+
+                    <button type="submit" class="btn-action" style="margin-top: 10px;"><i class="fa-solid fa-floppy-disk"></i> Save Operating Schedule</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             AUDIT LOGS TAB
+             =================================================================== -->
+        <section id="tab-audit" class="tab-section">
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-shield-halved"></i> Cryptographic Audit Logs</h2>
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Action Event</th>
+                                <th>Details</th>
+                                <th>Performed By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             SECURITY & ROLES TAB
+             =================================================================== -->
+        <section id="tab-account" class="tab-section">
+            <div class="panel-card card-personal-creds">
+                <h2><i class="fa-solid fa-user-lock"></i> Update My Personal Credentials</h2>
+                <form id="change-pass-form" onsubmit="handleChangePersonalPassword(event)">
+                    <div class="form-group">
+                        <label>Username:</label>
+                        <input type="text" id="my-username" required placeholder="Enter username">
+                    </div>
+                    <div class="form-group">
+                        <label>Current Password:</label>
+                        <input type="password" id="my-curr-pass" required placeholder="Confirm current password">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password (Leave blank if keeping current):</label>
+                        <input type="password" id="my-new-pass" placeholder="Enter new password">
+                    </div>
+                    <button type="submit" class="btn-action"><i class="fa-solid fa-key"></i> Update Credentials</button>
+                </form>
+            </div>
+
+            <div class="panel-card card-role-mgmt">
+                <h2><i class="fa-solid fa-user-plus"></i> Create New Staff / Manager Account</h2>
+                <form id="create-user-form" onsubmit="interceptCreateUserAccount(event)">
+                    <div class="form-group">
+                        <label>New Account Username:</label>
+                        <input type="text" id="new-user-name" required placeholder="e.g., barista_john">
+                    </div>
+                    <div class="form-group">
+                        <label>Account Password:</label>
+                        <input type="password" id="new-user-pass" required placeholder="Assign temporary password">
+                    </div>
+                    <div class="form-group">
+    <label>Assigned System Role:</label>
+    <div class="custom-pill-selector">
+        <button type="button" class="pill-btn active" onclick="selectUserRolePill('Staff', this)">Staff</button>
+        <button type="button" class="pill-btn" onclick="selectUserRolePill('Admin', this)">Admin</button>
+    </div>
+    <input type="hidden" id="new-user-role" value="Staff">
+</div>
+                    <button type="submit" class="btn-action"><i class="fa-solid fa-user-check"></i> Initialize Account</button>
+                </form>
+            </div>
+
+            <div class="panel-card">
+                <h2><i class="fa-solid fa-users-gear"></i> System Accounts Registry</h2>
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Role ID</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- EDIT CONTAINER MODAL -->
+    <div id="edit-container-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square"></i> Edit Container Unit Cost &amp; Safety Threshold</h3>
+                <button class="modal-close-btn" onclick="closeEditContainerModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-edit-container" onsubmit="submitEditContainer(event)">
+                    <input type="hidden" id="edit-inv-id">
+                    <div class="form-group">
+                        <label>Container Item Name:</label>
+                        <input type="text" id="edit-inv-name" disabled style="background:#eee;">
+                    </div>
+                    <div class="form-group">
+                        <label>Unit Cost (₱):</label>
+                        <input type="number" step="0.01" id="edit-inv-cost" required min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Safety Threshold Limit:</label>
+                        <input type="number" id="edit-inv-threshold" required min="1">
+                    </div>
+                    <div class="modal-footer" style="padding:0; background:transparent; border:none; margin-top:20px;">
+                        <button type="button" class="btn-action" style="background-color:#666;" onclick="closeEditContainerModal()">Cancel</button>
+                        <button type="submit" class="btn-action">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- EOD ITEMIZED BREAKDOWN MODAL POPUP -->
+    <div id="eod-details-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="modal-closeout-title"><i class="fa-solid fa-receipt"></i> EOD Itemized Breakdown</h3>
+                <button class="modal-close-btn" onclick="closeCloseoutDetailsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Menu Item Name</th>
+                                <th>Unit Price</th>
+                                <th>Total Number Sold</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-closeout-items-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-action" onclick="closeCloseoutDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DAILY MASTER AUDIT TICKET MODAL -->
+    <div id="master-ticket-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-print"></i> Daily Master Audit Ticket</h3>
+                <button class="modal-close-btn" onclick="closeMasterTicketModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" id="master-ticket-print-area">
+                <div style="text-align:center; margin-bottom:15px; border-bottom:2px solid var(--primary); padding-bottom:10px;">
+                    <h2 style="color:var(--primary); font-size:1.4rem;">Cafe de Melle — Executive Master Audit Ticket</h2>
+                    <p style="font-size:0.85rem; color:#666;" id="ticket-date-display">Shift Date: 2026-03-30</p>
+                </div>
+                <div id="master-ticket-content" style="display:flex; flex-direction:column; gap:15px; font-size:0.9rem;">
+                    <!-- Dynamically populated summary sections -->
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex; gap:10px; justify-content:flex-end;">
+                <button type="button" class="btn-action" style="background-color:#666;" onclick="closeMasterTicketModal()">Close</button>
+                <button type="button" class="btn-action" style="background-color:var(--bronze-accent);" onclick="printMasterTicketModal()"><i class="fa-solid fa-print"></i> Print Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECURITY RE-AUTHENTICATION MODAL -->
+    <div id="security-confirm-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-shield"></i> Security Re-Authentication Required</h3>
+                <button class="modal-close-btn" onclick="closeSecurityModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.9rem; color: #555; margin-bottom: 15px;">
+                    This action requires high-impact executive authorization. Please re-enter your current password to proceed.
+                </p>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="security-confirm-pass">Current Password:</label>
+                    <input type="password" id="security-confirm-pass" placeholder="Enter your current password" onkeydown="if(event.key==='Enter') verifyAndExecutePendingAction()">
+                </div>
+                <div id="security-modal-msg" class="status-msg" style="margin-top: 10px; display:none;"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn-action" style="background-color:#666;" onclick="closeSecurityModal()">Cancel</button>
+                <button type="button" class="btn-action btn-danger-confirm" onclick="verifyAndExecutePendingAction()">Confirm &amp; Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/admin.js"></script>
+</body>
+</html>

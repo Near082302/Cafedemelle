@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cafe de Melle - Executive Manager Portal</title>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* ===========================================================================
+           1. COLOR PALETTE DEFINITION & CSS VARIABLES
+           =========================================================================== */
+        :root {
+            --primary: #004B00;      /* Forest Green */
+            --secondary: #5F8F5F;    /* Sage Green */
+            --light-accent: #AFC7A8; /* Light Green */
+            --bg-color: #F8F5E9;     /* Cream Background */
+            --chocolate: #5A3825;    /* Coffee Brown */
+            --gold: #D4A84F;         /* Honey Gold */
+            --text-dark: #292929;    /* Dark Charcoal */
+            --card-bg: #FFFFFF;      /* White Card Background */
+            --danger: #c62828;       /* Red Alert */
+            --danger-light: #fde8e8; /* Soft Red Toast Background */
+            --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+
+        /* ===========================================================================
+           2. VIEWPORT & CENTERED GLASS CONTAINER ACCOMMODATIONS
+           =========================================================================== */
+        body { 
+            background-color: var(--bg-color); 
+            background-image: radial-gradient(circle at 50% 50%, rgba(95, 143, 95, 0.08) 0%, transparent 60%);
+            color: var(--text-dark); 
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; 
+            padding: 20px;
+        }
+
+        .login-card {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 420px;
+            padding: 40px 32px;
+            border-radius: 16px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative;
+        }
+
+        .brand-header {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 14px;
+            border: 2px solid var(--gold);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .brand-header h1 {
+            font-size: 1.5rem;
+            color: var(--primary);
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .brand-header p {
+            font-size: 0.88rem;
+            color: var(--chocolate);
+            font-weight: 600;
+        }
+
+        /* ===========================================================================
+           3. ACCESSIBLE CORNER/TOP ERROR ALERT TOAST
+           =========================================================================== */
+        #error-toast {
+            display: none;
+            background-color: var(--danger-light);
+            border: 1px solid rgba(198, 40, 40, 0.3);
+            border-left: 4px solid var(--danger);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.88rem;
+            color: var(--danger);
+            font-weight: 600;
+            line-height: 1.4;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        #error-toast i {
+            font-size: 1.1rem;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===========================================================================
+           4. SMOOTH FLOATING INPUT LABELS & INPUT FIELD STYLES
+           =========================================================================== */
+        .form-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-control {
+            width: 100%;
+            height: 52px;
+            padding: 18px 40px 6px 14px;
+            font-size: 0.95rem;
+            color: var(--text-dark);
+            background: transparent;
+            border: 1.5px solid var(--secondary);
+            border-radius: 8px;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 75, 0, 0.12);
+        }
+
+        /* Floating Label Mechanics */
+        .floating-label {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.95rem;
+            color: #666;
+            pointer-events: none;
+            transition: var(--transition-smooth);
+            background-color: transparent;
+            padding: 0 2px;
+        }
+
+        /* Scale and Glide Upward state when active or non-empty */
+        .form-control:focus ~ .floating-label,
+        .form-control:not(:placeholder-shown) ~ .floating-label {
+            top: 10px;
+            transform: translateY(0);
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* ===========================================================================
+           5. PASSWORD VISIBILITY TOGGLE ICON
+           =========================================================================== */
+        .password-toggle-btn {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #777;
+            cursor: pointer;
+            padding: 6px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease;
+            z-index: 2;
+        }
+
+        .password-toggle-btn:hover {
+            color: var(--primary);
+        }
+
+        /* ===========================================================================
+           6. BUTTON SUBMISSION LOADING STATE
+           =========================================================================== */
+        .btn-submit {
+            width: 100%;
+            height: 50px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0, 75, 0, 0.2);
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            background-color: var(--secondary);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.75;
+            cursor: not-allowed;
+            animation: pulseState 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulseState {
+            0% { opacity: 0.75; }
+            50% { opacity: 0.5; }
+            100% { opacity: 0.75; }
+        }
+
+        /* Mobile specific spacing accommodations */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <main class="login-card">
+        <header class="brand-header">
+            <img src="images/Logo.jpg" alt="Cafe de Melle Logo" class="brand-logo">
+            <div>
+                <h1>Cafe de Melle</h1>
+                <p>Executive Manager Portal</p>
+            </div>
+        </header>
+
+        <!-- ACCESSIBLE CORNER/INLINE ERROR CARD TOAST -->
+        <div id="error-toast" role="alert" aria-live="assertive">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span id="error-toast-text">Authentication failed. Please verify credentials.</span>
+        </div>
+
+        <form id="login-form" novalidate>
+            <!-- USERNAME INPUT WITH FLOATING LABEL -->
+            <div class="form-group">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-control" 
+                        placeholder=" " 
+                        required 
+                        autocomplete="username"
+                    />
+                    <label for="username" class="floating-label">Username</label>
+                </div>
+            </div>
+
+            <!-- PASSWORD INPUT WITH FLOATING LABEL & VISIBILITY TOGGLE -->
+            <div class="form-group">
+                <div class="input-wrapper">
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-control" 
+                        placeholder=" " 
+                        required 
+                        autocomplete="current-password"
+                    />
+                    <label for="password" class="floating-label">Password</label>
+                    <button 
+                        type="button" 
+                        id="toggle-password-btn" 
+                        class="password-toggle-btn" 
+                        aria-label="Toggle password visibility"
+                        tabindex="-1"
+                    >
+                        <i class="fa-solid fa-eye" id="toggle-password-icon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUBMIT BUTTON WITH ACTIVE LOADING STATE -->
+            <button type="submit" id="submit-btn" class="btn-submit">
+                <span id="submit-btn-text">Sign In to Dashboard</span>
+            </button>
+        </form>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('login-form');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const togglePasswordBtn = document.getElementById('toggle-password-btn');
+            const togglePasswordIcon = document.getElementById('toggle-password-icon');
+            const submitBtn = document.getElementById('submit-btn');
+            const submitBtnText = document.getElementById('submit-btn-text');
+            const errorToast = document.getElementById('error-toast');
+            const errorToastText = document.getElementById('error-toast-text');
+
+            /* ===========================================================================
+               1. PASSWORD VISIBILITY TOGGLE HANDLER
+               =========================================================================== */
+            togglePasswordBtn.addEventListener('click', () => {
+                const isPasswordType = passwordInput.getAttribute('type') === 'password';
+                passwordInput.setAttribute('type', isPasswordType ? 'text' : 'password');
+                
+                togglePasswordIcon.classList.toggle('fa-eye', !isPasswordType);
+                togglePasswordIcon.classList.toggle('fa-eye-slash', isPasswordType);
+            });
+
+            /* ===========================================================================
+               2. HELPER TO SHOW ACCESSIBLE ERROR TOAST
+               =========================================================================== */
+            function showErrorToast(message) {
+                errorToastText.textContent = message;
+                errorToast.style.display = 'flex';
+            }
+
+            function hideErrorToast() {
+                errorToast.style.display = 'none';
+                errorToastText.textContent = '';
+            }
+
+            /* Clear toast errors on user re-typing */
+            usernameInput.addEventListener('input', hideErrorToast);
+            passwordInput.addEventListener('input', hideErrorToast);
+
+            /* ===========================================================================
+               3. FORM SUBMISSION & BACKEND API INTERACTION
+               =========================================================================== */
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideErrorToast();
+
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!username || !password) {
+                    showErrorToast('Username and password are required.');
+                    return;
+                }
+
+                // APPLY BUTTON SUBMISSION LOADING STATE
+                submitBtn.disabled = true;
+                submitBtnText.textContent = '🔒 Securing Session...';
+
+                try {
+                    const response = await fetch('/api/admin/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        window.location.href = '/admin';
+                    } else {
+                        // Display exact backend error response or rate-limiting message
+                        showErrorToast(data.error || 'Invalid credentials. Please try again.');
+                        
+                        // RESTORE BUTTON STATE
+                        submitBtn.disabled = false;
+                        submitBtnText.textContent = 'Sign In to Dashboard';
+                    }
+                } catch (error) {
+                    showErrorToast('A network connection error occurred. Please try again.');
+                    
+                    // RESTORE BUTTON STATE
+                    submitBtn.disabled = false;
+                    submitBtnText.textContent = 'Sign In to Dashboard';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

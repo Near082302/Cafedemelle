@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cafe de Melle - Admin Access</title>
+    <style>
+        :root {
+            --primary: #004B00;
+            --secondary: #5F8F5F;
+            --light-accent: #AFC7A8;
+            --bg-color: #F8F5E9;
+            --chocolate: #5A3825;
+            --gold: #D4A84F;
+            --danger: #c62828;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body {
+            background: radial-gradient(circle at top left, #1b3d1b 0%, #004B00 40%, #2a180e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(212, 168, 79, 0.12);
+            border-radius: 50%;
+            top: -50px;
+            right: -50px;
+            blur: 80px;
+            filter: blur(60px);
+        }
+
+        .login-box {
+            background: #FFFFFF;
+            width: 100%;
+            max-width: 400px;
+            padding: 42px 35px;
+            border-radius: 18px;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(212, 168, 79, 0.35);
+            position: relative;
+            z-index: 2;
+            transition: transform 0.3s ease;
+        }
+
+        .cafe-icon-wrapper {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #EFEAD8 0%, #E2D9BE 100%);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 18px;
+            color: var(--primary);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+            border: 2px solid var(--gold);
+        }
+
+        .login-box h2 {
+            color: var(--primary);
+            font-size: 1.7rem;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .login-box p.login-sub {
+            color: var(--chocolate);
+            font-size: 0.92rem;
+            margin-bottom: 28px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: var(--chocolate);
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 13px 15px;
+            border: 1.5px solid var(--light-accent);
+            border-radius: 10px;
+            background: var(--bg-color);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        .login-box input:focus {
+            border-color: var(--primary);
+            background: #FFFFFF;
+            box-shadow: 0 0 0 3px rgba(0, 75, 0, 0.12);
+        }
+
+        .login-box button {
+            width: 100%;
+            padding: 13px;
+            background: var(--gold);
+            color: var(--primary);
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.05rem;
+            transition: all 0.25s ease;
+            margin-top: 8px;
+            box-shadow: 0 4px 12px rgba(212, 168, 79, 0.3);
+        }
+
+        .login-box button:hover {
+            background-color: var(--chocolate);
+            color: #FFFFFF;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(90, 56, 37, 0.35);
+        }
+
+        #login-error {
+            background-color: #ffebee;
+            color: var(--danger);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            margin-top: 18px;
+            display: none;
+            font-weight: 600;
+            border: 1px solid #ffcdd2;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-box">
+        <div class="cafe-icon-wrapper">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                <line x1="6" y1="1" x2="6" y2="4"></line>
+                <line x1="10" y1="1" x2="10" y2="4"></line>
+                <line x1="14" y1="1" x2="14" y2="4"></line>
+            </svg>
+        </div>
+        <h2>Cafe de Melle</h2>
+        <p class="login-sub">Executive Manager Access</p>
+
+        <form id="admin-login-form">
+            <div class="form-group">
+                <label for="adminUser">Username</label>
+                <input type="text" id="adminUser" placeholder="Enter username" aria-label="Username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="adminPass">Password</label>
+                <input type="password" id="adminPass" placeholder="Enter password" aria-label="Password" required>
+            </div>
+
+            <button type="submit">Sign In to Dashboard</button>
+        </form>
+
+        <p id="login-error">Invalid Username or Password</p>
+    </div>
+
+    <script>
+    document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const user = document.getElementById('adminUser').value;
+        const pass = document.getElementById('adminPass').value;
+        const errEl = document.getElementById('login-error');
+        errEl.style.display = 'none';
+
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ username: user, password: pass })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                window.location.href = '/admin';
+            } else {
+                errEl.textContent = data.error || 'Invalid username or password.';
+                errEl.style.display = 'block';
+            }
+        } catch (err) {
+            errEl.textContent = 'Server connection error.';
+            errEl.style.display = 'block';
+        }
+    });
+    </script>
+</body>
+</html>

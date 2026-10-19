@@ -1,0 +1,791 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- SEO METADATA FOR GOOGLE SEARCH & SOCIAL MEDIA SHARING -->
+    <title>Cafe de Melle | Specialty Coffee & Artisanal Pastries in Caloocan</title>
+    <meta name="description" content="Visit Cafe de Melle in Caloocan for artisanal pastries, specialty coffee, Harry Chocolate drinks, and refreshing fruit sodas. Order via GrabFood or drop by our cozy shop!">
+    <meta name="keywords" content="Cafe de Melle, Caloocan Coffee Shop, Specialty Coffee, Spanish Latte, Harry Chocolate, Korean Garlic Bun, Caloocan Cafe">
+    <meta name="author" content="Cafe de Melle">
+    
+    <!-- Open Graph Tags -->
+    <meta property="og:title" content="Cafe de Melle - Specialty Coffee & Artisanal Pastries">
+    <meta property="og:description" content="Handcrafted coffee, freshly-baked pastries, Harry Chocolate drinks, and fruit refreshers. Visit us in Caloocan or order on GrabFood!">
+    <meta property="og:image" content="images/Logo.jpg">
+    <meta property="og:type" content="website">
+
+    <!-- Schema.org JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "CafeOrCoffeeShop",
+      "name": "Cafe de Melle",
+      "image": "images/Logo.jpg",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Kabatuhan, Brgy 168",
+        "addressLocality": "Caloocan",
+        "addressRegion": "Metro Manila",
+        "countryName": "PH"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 14.735,
+        "longitude": 121.018
+      },
+      "url": "https://cafedemelle.com",
+      "priceRange": "₱50 - ₱200",
+      "servesCuisine": "Coffee, Bakery, Pastries"
+    }
+    </script>
+
+    <!-- FONT AWESOME ICONS LIBRARY -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- LINK TO EXTERNAL CSS STYLESHEET -->
+    <link rel="stylesheet" href="index.css">
+
+    <!-- Favicon Tag -->
+    <link rel="icon" type="image/jpeg" href="images/Logo.jpg">
+</head>
+<body>
+
+    <!-- ===================================================================
+         1. NAVBAR & STORE STATUS BADGE (STICKY HEADER)
+         =================================================================== -->
+    <header class="navbar" id="main-navbar">
+        <div class="logo-container">
+            <a href="#home" class="logo-link">
+                <img src="images/Logo.jpg" alt="Cafe de Melle Logo" class="logo-img">
+                <span class="logo-text">Cafe de Melle</span>
+            </a>
+            <div id="store-status" class="status-badge">Checking hours...</div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="nav-links" id="nav-links">
+            <a href="#home" class="nav-item active">Home</a>
+            <a href="#menu" class="nav-item">Menu</a>
+            <a href="#about" class="nav-item">About Us</a>
+            <a href="#location" class="nav-item">Location</a>
+            <a href="#socials" class="nav-item">Connect</a>
+            <a href="#grab" class="nav-item">Order via Grab</a>
+            <a href="#reviews" class="nav-item">Reviews</a>
+        </nav>
+
+        <!-- Mobile Hamburger Toggle Button -->
+        <button class="hamburger" id="hamburger-btn" aria-label="Toggle Navigation">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </header>
+
+    <main>
+
+        <!-- ===================================================================
+             2. MODERN DIGITAL STOREFRONT HERO SECTION
+             =================================================================== -->
+        <section id="home" class="hero-section">
+            <div class="hero-backdrop-glow"></div>
+            <div class="hero-container">
+                <div class="hero-text-side">
+                    <span class="hero-badge-pill">
+                        <i class="fa-solid fa-award text-gold"></i> #1 Top Rated Cafe in North Caloocan on Google
+                    </span>
+                    <h1 class="hero-title">Good coffee, great bread, <span class="highlight-gold">even better moments</span></h1>
+                    <p class="hero-lead">Specialty coffee, artisanal European pastries, and fruit sodas where you can enjoy your quality time in a warm, cozy ambience.</p>
+                    
+                    <div class="hero-actions">
+                        <a href="#menu" class="btn btn-primary-hero"><i class="fa-solid fa-mug-hot"></i> Explore Menu</a>
+                        <a href="#grab" class="btn btn-grab"><i class="fa-solid fa-motorcycle"></i> Order on Grab</a>
+                    </div>
+
+                    <div class="hero-trust-pills">
+                        <span><i class="fa-brands fa-google text-gold"></i> 4.9 ★ Top Rated on Google</span>
+                        <span><i class="fa-solid fa-circle-check"></i> Handcrafted Drinks</span>
+                        <span><i class="fa-solid fa-circle-check"></i> Cozy Ambiance</span>
+                        <span><i class="fa-solid fa-circle-check"></i> Dine-In & Takeout</span>
+                    </div>
+                </div>
+
+                <div class="hero-visual-side">
+                    <div class="hero-image-frame">
+                        <img src="images/kgb.jpeg" alt="Cafe de Melle Signature Pastry" class="hero-main-img" onerror="this.src='images/Logo.jpg';">
+                        <div class="hero-floating-card top-card">
+                            <i class="fa-solid fa-crown text-gold"></i>
+                            <div>
+                                <strong>Best Seller!</strong>
+                                <small>Korean Garlic Bun</small>
+                            </div>
+                        </div>
+                        <div class="hero-floating-card bottom-card">
+                            <i class="fa-solid fa-star text-gold"></i>
+                            <div>
+                                <strong>4.9 ★ Rating</strong>
+                                <small>50+ Google Reviews</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             2.1 ANNOUNCEMENT HERO SLIDER (ADMIN PORTAL CONNECTED)
+             =================================================================== -->
+        <section class="announcement-bar-section">
+            <div class="announcement-wrapper">
+                <div class="hero-slider" id="hero-slider">
+                    <div class="hero-slider-track" id="hero-slider-track">
+                        <!-- Slide 1: Matcha Series -->
+                        <div class="hero-slide active" style="background-image: url('images/matcha.jpeg');">
+                            <div class="hero-overlay"></div>
+                            <div class="hero-content">
+                                <span class="hero-tag">New Seasonal Release</span>
+                                <h1>Try Our Newest Product: The Matcha Series!</h1>
+                                <p>Savor rich ceremonial-grade matcha blended to perfection. Experience our Iced Matcha Latte, Matcha Espresso Fusion, and Creamy Matcha Freeze today!</p>
+                            </div>
+                        </div>
+
+                        <!-- Slide 2: New Foods -->
+                        <div class="hero-slide" style="background-image: url('images/interior.jpeg');">
+                            <div class="hero-overlay"></div>
+                            <div class="hero-content">
+                                <span class="hero-tag">Fresh From The Kitchen</span>
+                                <h1>New Foods to Try With Friends & Family</h1>
+                                <p>Gather around delicious comfort dishes! Treat your crew to our loaded Cheese Nachos, rich Italian Meatball Spaghetti, and authentic Creamy Bacon Carbonara.</p>
+                            </div>
+                        </div>
+
+                        <!-- Slide 3: Grab Food Announcement -->
+                        <div class="hero-slide" style="background-image: url('images/maincafe.jpeg');">
+                            <div class="hero-overlay"></div>
+                            <div class="hero-content">
+                                <span class="hero-tag">Delivery Update</span>
+                                <h1>We Are Now Live on GrabFood!</h1>
+                                <p>Craving your favorite coffee and fresh pastries at home or work? Scroll down to our Grab section for step-by-step ordering instructions!</p>
+                            </div>
+                        </div>
+
+                        <!-- Slide 4: Freshly Baked Daily -->
+                        <div class="hero-slide" style="background-image: url('images/kgb.jpeg');">
+                            <div class="hero-overlay"></div>
+                            <div class="hero-content">
+                                <span class="hero-tag">Daily Specialty</span>
+                                <h1>Oven-Fresh Breads & Pastry Bundles</h1>
+                                <p>Pair your espresso with our freshly baked Korean Garlic Buns, savory croissants, and butter rolls baked fresh in-house every morning.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Carousel Dot Indicators -->
+                <div class="slider-dots" id="hero-dots">
+                    <span class="dot active" onclick="setSlide(0)"></span>
+                    <span class="dot" onclick="setSlide(1)"></span>
+                    <span class="dot" onclick="setSlide(2)"></span>
+                    <span class="dot" onclick="setSlide(3)"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             3. MENU SECTION WITH SEARCH & CATEGORY FILTERS
+             =================================================================== -->
+        <section id="menu" class="page-section">
+            <div class="section-container text-center">
+                <h2 class="section-title">Our Menu</h2>
+                <p class="description-text">Handcrafted espresso drinks, fresh daily baked treats, and sparkling fruit refreshers. Tap any item to view options and pricing!</p>
+
+                <!-- Search Input Box Container -->
+                <div class="search-container">
+                    <div class="search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="menu-search" placeholder="Search for coffee, pastries, sodas..." aria-label="Search Menu Items" />
+                    </div>
+                </div>
+
+                <!-- Category Filter Buttons -->
+                <div class="filter-container">
+                    <button class="filter-btn active" data-category="all"><i class="fa-solid fa-border-all"></i> All Items</button>
+                    <button class="filter-btn" data-category="hot-coffee"><i class="fa-solid fa-mug-hot"></i> Hot Coffee</button>
+                    <button class="filter-btn" data-category="iced-coffee"><i class="fa-solid fa-snowflake"></i> Iced Coffee</button>
+                    <button class="filter-btn" data-category="non-coffee"><i class="fa-solid fa-glass-water"></i> Non-Coffee</button>
+                    <button class="filter-btn" data-category="pastry"><i class="fa-solid fa-bread-slice"></i> Pastries</button>
+                    <button class="filter-btn" data-category="soda"><i class="fa-solid fa-champagne-glasses"></i> Fruit Sodas</button>
+                </div>
+
+                <!-- Badge Legend Block -->
+                <div class="badge-legend">
+                    <span class="legend-item"><i class="fa-solid fa-heart badge-signature-icon"></i> Cafe Signature</span>
+                    <span class="legend-divider">|</span>
+                    <span class="legend-item"><i class="fa-solid fa-star badge-favorite-icon"></i> Customer Favorite</span>
+                </div>
+
+                <!-- MENU CARDS GRID -->
+                <div class="menu-grid" id="menu-grid">
+                    
+                    <!-- HOT COFFEES -->
+                    <div class="card" data-category="hot-coffee">
+                        <div class="card-img-container">
+                            <img src="images/americano.jpg" alt="Hot Americano" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Hot Americano</h4>
+                            <p>A classic coffee made with rich espresso and hot water for a bold, balanced taste.</p>
+                            <span class="price">₱100</span>
+                        </div>
+                    </div>
+
+                    <div class="card" data-category="hot-coffee">
+                        <div class="card-img-container">
+                            <img src="images/cappuchino.jpg" alt="Hot Cappuccino" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Hot Cappuccino</h4>
+                            <p>Bold espresso blended with silky steamed milk and finished with a light, airy foam.</p>
+                            <span class="price">₱120</span>
+                        </div>
+                    </div>
+
+                    <div class="card" data-category="hot-coffee">
+                        <div class="card-img-container">
+                            <img src="images/cafe latte.jpg" alt="Hot Cafe Latte" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Hot Cafe Latte</h4>
+                            <p>Rich espresso blended with silky steamed milk for a smooth and creamy classic.</p>
+                            <span class="price">₱135</span>
+                        </div>
+                    </div>
+
+                    <!-- ICED COFFEES -->
+                    <div class="card" data-category="iced-coffee">
+                        <span class="card-badge" title="Cafe Signature">
+                            <i class="fa-solid fa-heart badge-signature-icon"></i>
+                        </span>
+                        <div class="card-img-container">
+                            <img src="images/spanish latte.jpg" alt="Iced Spanish Latte" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Iced Spanish Latte</h4>
+                            <p>Creamy, smooth, and perfectly sweet, with rich espresso in every cup.</p>
+                            <span class="price">₱140</span>
+                        </div>
+                    </div>
+
+                    <div class="card" data-category="iced-coffee">
+                        <span class="card-badge" title="Customer Favorite">
+                            <i class="fa-solid fa-star badge-favorite-icon"></i>
+                        </span>
+                        <div class="card-img-container">
+                            <img src="images/caramelmacchiato.jpg" alt="Iced Caramel Macchiato" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Iced Caramel Macchiato</h4>
+                            <p>Smooth espresso blended with creamy milk and finished with rich caramel drizzle.</p>
+                            <span class="price">₱145</span>
+                        </div>
+                    </div>
+
+                    <!-- PASTRIES -->
+                    <div class="card" data-category="pastry">
+                        <span class="card-badge" title="Customer Favorite">
+                            <i class="fa-solid fa-star badge-favorite-icon"></i>
+                        </span>
+                        <div class="card-img-container">
+                            <img src="images/kgb.jpeg" alt="Korean Garlic Bun" onerror="this.src='images/Logo.jpg';">
+                        </div>
+                        <div class="card-info">
+                            <h4>Korean Garlic Bun</h4>
+                            <p>Freshly baked bun loaded with cream cheese and savory garlic butter.</p>
+                            <span class="price">₱95</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- MENU ITEM DETAIL / FOCUS MODAL -->
+        <div id="item-detail-modal" class="modal-overlay hide">
+            <div class="modal-card menu-detail-modal-card">
+                <button id="close-item-modal-btn" class="modal-close-btn" aria-label="Close Modal">&times;</button>
+                <div class="item-detail-grid">
+                    <div class="item-detail-image-box">
+                        <img id="modal-item-img" src="images/Logo.jpg" alt="Menu Item Image">
+                        <span id="modal-item-badge" class="item-detail-badge hide"></span>
+                    </div>
+                    <div class="item-detail-content">
+                        <span id="modal-item-category" class="item-category-pill">Category</span>
+                        <h3 id="modal-item-name" class="item-detail-title">Item Name</h3>
+                        <p id="modal-item-desc" class="item-detail-desc">Item description goes here...</p>
+
+                        <!-- Category-aware options container swapped dynamically via index.js -->
+                        <div class="item-options-box" id="modal-options-container">
+                            <h5 class="options-heading"><i class="fa-solid fa-mug-hot"></i> Sizes & Pricing</h5>
+                            <div class="size-options-list" id="modal-size-list">
+                                <div class="size-option-pill active">
+                                    <span>Regular / Medium (16oz)</span>
+                                    <strong id="modal-item-price">₱0</strong>
+                                </div>
+                                <div class="size-option-pill">
+                                    <span>Large / Up-Size (22oz)</span>
+                                    <strong>+₱20</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="item-options-box">
+                            <h5 class="options-heading"><i class="fa-solid fa-wheat-awn"></i> Allergen & Dietary Notes</h5>
+                            <ul class="allergen-list" id="modal-allergen-list">
+                                <li><i class="fa-solid fa-circle-check"></i> Contains Dairy & Soy</li>
+                                <li><i class="fa-solid fa-circle-check"></i> Prepared fresh daily in our kitchen</li>
+                            </ul>
+                        </div>
+
+                        <div class="modal-actions">
+                            <a href="#grab" id="modal-order-grab-btn" class="btn btn-grab"><i class="fa-solid fa-motorcycle"></i> Order on Grab Food</a>
+                            <button id="modal-close-action-btn" class="btn btn-secondary-modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             4. ABOUT US SECTION (STAT NUMBERS CORRECTED)
+             =================================================================== -->
+        <section id="about" class="page-section alt-bg">
+            <div class="section-container text-center">
+                <h2 class="section-title">About Cafe de Melle</h2>
+                <p class="description-text">
+                    Crafting memorable coffee experiences and artisanal treats for our community everyday.
+                </p>
+
+                <!-- BRAND STATS GRID -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number" data-target="100">100</span><span class="stat-plus">%</span>
+                        <p class="stat-label">Artisanal Quality</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" data-target="15">15</span><span class="stat-plus">+</span>
+                        <p class="stat-label">Specialty Drinks</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" data-target="365">365</span><span class="stat-plus"> Days</span>
+                        <p class="stat-label">Freshly Baked Daily</p>
+                    </div>
+                </div>
+
+                <!-- STORY CAROUSEL SECTION -->
+                <div class="about-carousel">
+                    <!-- SLIDE 1 -->
+                    <div class="about-slide active">
+                        <img src="images/maincafe.jpeg" alt="Our Humble Beginnings" class="about-img" onerror="this.src='images/Logo.jpg';">
+                        <div class="about-text">
+                            <h3>Our Beginnings</h3>
+                            <p>Welcome to Cafe de Melle! We started as a cozy neighborhood space dedicated to serving handcrafted coffee, freshly-baked pastries, and sparkling fruit refreshers.</p>
+                        </div>
+                    </div>
+
+                    <!-- SLIDE 2 -->
+                    <div class="about-slide">
+                        <img src="images/interior.jpeg" alt="Freshly Baked Everyday" class="about-img" onerror="this.src='images/Logo.jpg';">
+                        <div class="about-text">
+                            <h3>Baked Fresh Daily</h3>
+                            <p>Every morning, our kitchen comes alive with the aroma of buttery European pastries, warm packaged loaf breads, and savory garlic buns.</p>
+                        </div>
+                    </div>
+
+                    <!-- SLIDE 3 -->
+                    <div class="about-slide">
+                        <img src="images/drinks.jpeg" alt="Crafted Coffee" class="about-img" onerror="this.src='images/Logo.jpg';">
+                        <div class="about-text">
+                            <h3>Comfort in Every Cup</h3>
+                            <p>Whether starting your morning in our cafe or grabbing a mid-day iced coffee boost or Harry Chocolate on Grab, we bring care and quality to every order.</p>
+                        </div>
+                    </div>
+
+                    <button class="about-btn prev" id="about-prev" aria-label="Previous Slide">❮</button>
+                    <button class="about-btn next" id="about-next" aria-label="Next Slide">❯</button>
+                </div>
+
+                <!-- Carousel Dot Navigation -->
+                <div class="about-dots">
+                    <span class="about-dot active" onclick="setAboutSlide(0)"></span>
+                    <span class="about-dot" onclick="setAboutSlide(1)"></span>
+                    <span class="about-dot" onclick="setAboutSlide(2)"></span>
+                </div>
+
+                <!-- CORE VALUES GRID -->
+                <h3 class="subsection-title">Why People Love Us</h3>
+                <div class="values-grid">
+                    <div class="value-card">
+                        <div class="value-icon"><i class="fa-solid fa-mug-saucer"></i></div>
+                        <h4>Premium Beans</h4>
+                        <p>We source fine espresso beans to guarantee a smooth, rich flavor profile in every cup.</p>
+                    </div>
+                    <div class="value-card">
+                        <div class="value-icon"><i class="fa-solid fa-bread-slice"></i></div>
+                        <h4>Oven-Fresh Pastries</h4>
+                        <p>Baked fresh every single morning to ensure perfect flake, warmth, and savory taste.</p>
+                    </div>
+                    <div class="value-card">
+                        <div class="value-icon"><i class="fa-solid fa-truck-fast"></i></div>
+                        <h4>Fast & Fresh Delivery</h4>
+                        <p>Packed securely so your iced drinks stay cold and hot pastries stay warm until your door.</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             5. STORE LOCATION SECTION
+             =================================================================== -->
+        <section id="location" class="page-section">
+            <div class="section-container text-center">
+                <h2 class="section-title">Visit Our Store</h2>
+                <p class="description-text">
+                    <i class="fa-solid fa-location-dot" style="color: var(--chocolate);"></i> <strong>Address:</strong> Cafe de Melle, Kabatuhan, Brgy 168, Caloocan, Metro Manila
+                </p>
+                
+                <div class="map-container">
+                    <iframe 
+                        src="https://maps.google.com/maps?q=Cafe+de+Melle+Caloocan&t=&z=16&ie=UTF8&iwloc=&output=embed" 
+                        width="100%" 
+                        height="380" 
+                        title="Cafe de Melle Google Maps Location"
+                        loading="lazy"
+                        allowfullscreen>
+                    </iframe>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             6. SOCIAL MEDIA CONNECT SECTION & PROMO TRIGGER GATING
+             =================================================================== -->
+        <section id="socials" class="page-section alt-bg">
+            <div class="section-container text-center">
+                <h2 class="section-title">Follow Us & Stay Connected!</h2>
+                <p class="description-text">
+                    Catch our latest coffee drops, promos, and announcements on our official social media pages:
+                </p>
+
+                <!-- Facebook & Instagram Follow Buttons (Gating Trigger) -->
+                <div class="social-buttons-container mb-40">
+                    <a href="https://www.facebook.com/profile.php?id=61588216101905" target="_blank" rel="noopener noreferrer" class="btn btn-facebook social-follow-link" id="fb-follow-link">
+                        <i class="fa-brands fa-facebook-f btn-icon"></i>
+                        Follow on Facebook
+                    </a>
+                    <a href="https://www.instagram.com/cafe.demelle/" target="_blank" rel="noopener noreferrer" class="btn btn-instagram social-follow-link" id="ig-follow-link">
+                        <i class="fa-brands fa-instagram btn-icon"></i>
+                        Follow on Instagram
+                    </a>
+                </div>
+
+                <!-- PROMO REWARD UI CONTAINER -->
+                <div class="promo-container" id="promo-container">
+                    <div class="promo-header">
+                        <h3>Free Drink Up-Size Reward</h3>
+                        <p>Save ₱20! Up-size your drink from Medium (₱139) to Large (₱159) for FREE.</p>
+                    </div>
+
+                    <!-- Gated Claim Button -->
+                    <button id="claim-promo-btn" class="btn promo-btn" disabled title="Click our Facebook or Instagram link above first to unlock this reward!">
+                        <i class="fa-solid fa-lock" id="claim-btn-icon"></i> <span id="claim-btn-text">Follow us on FB or IG (Click Link Above) to Unlock Reward</span>
+                    </button>
+
+                    <!-- USER-FRIENDLY PROMO REDEMPTION FORM -->
+                    <form id="promo-form" class="promo-form hide" novalidate>
+                        <div class="promo-instruction-banner">
+                            <p><i class="fa-solid fa-circle-info"></i> <strong>How to Redeem:</strong> Fill out the form below to generate your promo code. Present your code to the cashier at our physical cafe to claim your free drink up-size. Note: A 30-minute timer will begin as soon as your code is generated!</p>
+                        </div>
+
+                        <div class="promo-form-group">
+                            <label for="promo-name">
+                                <i class="fa-solid fa-user"></i> Full Name <span class="required-star">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="promo-name" 
+                                placeholder="e.g. Juan Dela Cruz" 
+                                required 
+                                autocomplete="name"
+                                style="text-transform: capitalize;"
+                            >
+                            <small class="promo-help-text">Auto-capitalized for clean voucher display.</small>
+                        </div>
+                        
+                        <div class="promo-form-group">
+                            <label for="promo-social">
+                                <i class="fa-brands fa-instagram"></i> FB or IG Username / Handle <span class="required-star">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="promo-social" 
+                                placeholder="e.g. @juandelacruz or FB Profile Name" 
+                                required
+                            >
+                        </div>
+
+                        <div class="promo-form-group">
+                            <label for="promo-contact">
+                                <i class="fa-solid fa-mobile-screen"></i> Philippine CP Number <span class="required-star">*</span>
+                            </label>
+                            <div class="ph-phone-wrapper">
+                                <span class="ph-flag-prefix">🇵🇭 +63</span>
+                                <input 
+                                    type="tel" 
+                                    id="promo-contact" 
+                                    placeholder="09171234567" 
+                                    maxlength="11" 
+                                    pattern="09[0-9]{9}" 
+                                    required
+                                    autocomplete="tel"
+                                >
+                            </div>
+                            <small class="promo-help-text">Must be an 11-digit PH mobile number starting with 09.</small>
+                        </div>
+
+                        <!-- PRIVACY & TERMS AGREEMENT CHECKBOX -->
+                        <div class="promo-checkbox-group">
+                            <input type="checkbox" id="promo-privacy-consent" required>
+                            <label for="promo-privacy-consent">
+                                I agree to the <a href="javascript:void(0)" id="open-terms-link" class="privacy-link">Terms of Service</a> & <a href="javascript:void(0)" id="open-privacy-link" class="privacy-link">Privacy Policy</a>, and consent to collecting my information under RA 10173 for promo voucher verification. <span class="required-star">*</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="submit-promo-btn" class="btn promo-btn">
+                            <i class="fa-solid fa-paper-plane"></i> Submit & Get Promo Code
+                        </button>
+                    </form>
+
+                    <!-- Digital Ticket Card (Initially Hidden) -->
+                    <div id="digital-ticket" class="ticket-card hide">
+                        <div class="ticket-badge">VALID FOR 30 MINUTES</div>
+                        <h4>Free Drink Up-Size Voucher</h4>
+                        <p class="ticket-instruction">Show this code to the cashier at the cafe counter upon ordering:</p>
+                        <div class="ticket-code-box" id="ticket-code-display">MELLE-XXX</div>
+                        <p class="ticket-timer" id="ticket-timer">Countdown: 30:00</p>
+                        <p class="ticket-note"><i class="fa-solid fa-triangle-exclamation"></i> Show this ticket to the cashier within 30 minutes! Once time expires, the voucher becomes invalid.</p>
+                    </div>
+
+                    <!-- Status/Error Message Box -->
+                    <p id="promo-msg" class="promo-status-msg hide"></p>
+                </div>
+
+                <!-- Social Community Highlights Grid -->
+                <div class="social-perks-grid">
+                    <div class="social-card">
+                        <div class="social-icon"><i class="fa-solid fa-camera"></i></div>
+                        <h4>Tag Us in Your Photos</h4>
+                        <p>Share your coffee moments with #CafeDeMelle for a chance to be featured on our page!</p>
+                    </div>
+                    <div class="social-card">
+                        <div class="social-icon"><i class="fa-solid fa-gift"></i></div>
+                        <h4>Exclusive Promos</h4>
+                        <p>Followers get first-dibs alerts on secret menu drops, buy-1-get-1 sales, and loaf discounts.</p>
+                    </div>
+                    <div class="social-card">
+                        <div class="social-icon"><i class="fa-solid fa-comments"></i></div>
+                        <h4>Fast Direct Messaging</h4>
+                        <p>Have questions about party orders or daily availability? Send us a DM anytime!</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             7. GRAB ORDER INSTRUCTIONS SECTION
+             =================================================================== -->
+        <section id="grab" class="page-section">
+            <div class="section-container text-center">
+                <h2 class="section-title">How to Order via Grab</h2>
+                <p class="description-text">Get your favorite brews, Harry Chocolate, and fresh bread delivered straight to your door!</p>
+                
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h4>Open Grab Food</h4>
+                        <p>Click the Green button below "Oder Now on Grab App".</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h4>Pick Your Drinks</h4>
+                        <p>Choose your coffee, pastries, or sodas.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h4>Enjoy Delivery</h4>
+                        <p>Fast delivery directly to your home!</p>
+                    </div>
+                </div>
+
+                <div class="grab-info-banner">
+                    <div class="grab-feature">
+                        <span class="grab-feature-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                        <div>
+                            <h5>Spill-Proof Packaging</h5>
+                            <p>Sealed carefully so your iced drinks arrive cold & hot drinks stay warm.</p>
+                        </div>
+                    </div>
+                    <div class="grab-feature">
+                        <span class="grab-feature-icon"><i class="fa-solid fa-bolt"></i></span>
+                        <div>
+                            <h5>Super Fast Dispatch</h5>
+                            <p>Orders are prepped immediately upon receipt for minimal wait time.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <a href="https://app.grab.com/s/MbddREOk" target="_blank" rel="noopener noreferrer" class="btn btn-grab">Order Now on Grab App <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             8. REVIEWS SECTION
+             =================================================================== -->
+        <section id="reviews" class="page-section alt-bg">
+            <div class="section-container text-center">
+                <h2 class="section-title">Customer Reviews</h2>
+                
+                <!-- SUMMARY RATING CARD -->
+                <div class="rating-summary-card">
+                    <div class="rating-big">4.9</div>
+                    <div class="rating-details">
+                        <div class="star-rating">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <p>Based on 55 verified customer reviews in Caloocan!</p>
+                    </div>
+                </div>
+
+                <!-- VERIFIED CUSTOMER REVIEWS GRID -->
+                <div class="reviews-grid">
+                    
+                    <!-- REVIEW 1 -->
+                    <div class="review-card">
+                        <div class="review-header">
+                            <img src="images/matcha.jpeg" alt="Mark Lester Tinguban Arañes" class="review-avatar" onerror="this.src='images/Logo.jpg';">
+                            <div class="review-author-info">
+                                <h5 class="author-name">Mark Lester Tinguban Arañes</h5>
+                                <span class="review-meta">2 days ago • via GrabFood</span>
+                            </div>
+                        </div>
+                        <div class="star-rating">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <div class="verified-tag verified-order">
+                            <i class="fa-solid fa-circle-check"></i> Verified Order
+                        </div>
+                        <p class="review-text">"That Dark Chocolate Coffee is insane! The dark chocolate flavor blends perfectly with the strong espresso."</p>
+                        <div class="review-order-footer">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span><strong>Ordered:</strong> Dark Chocolate Coffee, Korean Garlic Bun</span>
+                        </div>
+                    </div>
+
+                    <!-- REVIEW 2 -->
+                    <div class="review-card">
+                        <div class="review-header">
+                            <img src="images/hot salted caramel.jpeg" alt="Czean Xavier" class="review-avatar" onerror="this.src='images/Logo.jpg';">
+                            <div class="review-author-info">
+                                <h5 class="author-name">Czean Xavier</h5>
+                                <span class="review-meta">1 week ago • Dine-in</span>
+                            </div>
+                        </div>
+                        <div class="star-rating">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <div class="verified-tag verified-visit">
+                            <i class="fa-solid fa-circle-check"></i> Verified Visit
+                        </div>
+                        <p class="review-text">"Best study spot in Caloocan! Fast Wi-Fi, plenty of outlets, and the cafe latte kept me energized through my workload."</p>
+                        <div class="review-order-footer">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span><strong>Ordered:</strong> Hot Cafe Latte, Creamy Bacon Carbonara</span>
+                        </div>
+                    </div>
+
+                    <!-- REVIEW 3 -->
+                    <div class="review-card">
+                        <div class="review-header">
+                            <img src="images/My pretty wife.jpeg" alt="Ashley Mascariñas" class="review-avatar" onerror="this.src='images/Logo.jpg';">
+                            <div class="review-author-info">
+                                <h5 class="author-name">Ashley Mascariñas</h5>
+                                <span class="review-meta">3 weeks ago • via GrabFood</span>
+                            </div>
+                        </div>
+                        <div class="star-rating">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <div class="verified-tag verified-order">
+                            <i class="fa-solid fa-circle-check"></i> Verified Order
+                        </div>
+                        <p class="review-text">"The delivery went great, their korean garlic bun was the best bread ever! Their carbonara was spot on! Will order again soon!!!"</p>
+                        <div class="review-order-footer">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span><strong>Ordered:</strong> Korean Garlic Bun, Carbonara</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- REVIEW CTA BOX -->
+                <div class="review-cta-box">
+                    <p>Visited us recently? We'd love to hear your thoughts!</p>
+                    <a href="https://www.facebook.com/profile.php?id=61588216101905" target="_blank" rel="noopener noreferrer" class="btn">Leave a Review on Facebook</a>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- TERMS & PRIVACY MODAL DIALOG -->
+    <div id="privacy-modal" class="modal-overlay hide">
+        <div class="modal-card">
+            <button id="close-modal-btn" class="modal-close-btn" aria-label="Close Modal">&times;</button>
+            <h3 class="modal-title" id="modal-title">Terms of Service & Data Privacy Policy</h3>
+            <div class="modal-body">
+                <p><strong>1. Data Privacy Compliance (RA 10173):</strong> Cafe de Melle respects your privacy under the Philippine Data Privacy Act of 2012. We collect your Full Name, Social Media Handle, and Mobile Phone Number solely for generating and verifying promotional vouchers at our physical counter.</p>
+                <p><strong>2. Data Encryption & Security:</strong> All collected contact details are cryptographically encrypted at rest using AES-256-GCM encryption and will never be sold or shared with third parties.</p>
+                <p><strong>3. Voucher Redemption Rules:</strong> Promo vouchers are valid for 30 minutes from generation, non-transferable, limited to one claim per customer per visit, and hold no monetary cash value.</p>
+                <p><strong>4. Cookie Usage:</strong> Essential functional cookies are used only for administrative session management. No persistent cross-site tracking cookies are deployed.</p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-agree-btn" class="btn btn-modal-close">I Understand & Agree</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 Cafe de Melle. All Rights Reserved.</p>
+    </footer>
+
+    <script src="index.js"></script>
+</body>
+</html>
