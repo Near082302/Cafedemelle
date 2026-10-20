@@ -737,23 +737,43 @@ function renderEodMenuGrid(items) {
     const grid = document.getElementById('eod-menu-items-grid');
     if (!grid) return;
 
+    // GUARD 1: Don't interrupt if the user is currently typing in any input field!
+    if (document.activeElement && document.activeElement.closest('#tab-inventory')) {
+        return;
+    }
+
     if (!items || items.length === 0) {
         grid.innerHTML = '<div style="color:#888; grid-column: 1/-1; padding: 15px; text-align: center;">No menu items available to log.</div>';
         return;
     }
 
-    grid.innerHTML = items.map(item => `
-        <div class="eod-item-card" data-name="${item.name.toLowerCase()}" data-category="${item.category}" data-price="${item.price}">
-            <div class="eod-item-header">
-                <span>${escapeHtml(item.name)}</span>
-                <span class="eod-item-price">₱${parseFloat(item.price).toFixed(2)}</span>
+    // GUARD 2: Preserve any values already entered before re-rendering
+    const existingValues = {};
+    document.querySelectorAll('.eod-item-qty').forEach(input => {
+        const menuId = input.dataset.menuId;
+        if (menuId && input.value !== '0' && input.value !== '') {
+            existingValues[menuId] = input.value;
+        }
+    });
+
+    grid.innerHTML = items.map(item => {
+        const preservedQty = existingValues[item.id] !== undefined ? existingValues[item.id] : 0;
+        return `
+            <div class="eod-item-card" data-name="${item.name.toLowerCase()}" data-category="${item.category}" data-price="${item.price}">
+                <div class="eod-item-header">
+                    <span>${escapeHtml(item.name)}</span>
+                    <span class="eod-item-price">₱${parseFloat(item.price).toFixed(2)}</span>
+                </div>
+                <div class="eod-item-input-wrapper">
+                    <label>Units Sold:</label>
+                    <input type="number" min="0" value="${preservedQty}" class="eod-item-qty" data-menu-id="${item.id}" data-category="${item.category}" data-price="${item.price}" placeholder="e.g., 10" oninput="updateEodLiveTally()">
+                </div>
             </div>
-            <div class="eod-item-input-wrapper">
-                <label>Units Sold:</label>
-                <input type="number" min="0" value="0" class="eod-item-qty" data-menu-id="${item.id}" data-category="${item.category}" data-price="${item.price}" placeholder="e.g., 10" oninput="updateEodLiveTally()">
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+    
+    // Re-apply any active search or category filters
+    filterEodMenuGrid();
     updateEodLiveTally();
 }
 
