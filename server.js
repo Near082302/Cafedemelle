@@ -102,6 +102,7 @@ app.use(helmet({
                 "'unsafe-inline'", 
                 "'unsafe-eval'", 
                 "https://cdnjs.cloudflare.com", 
+                "https://cdn.jsdelivr.net",
                 "https://localtunnel.me", 
                 "*.localtunnel.me",
                 "*.ngrok-free.app",
@@ -419,6 +420,13 @@ function initDatabaseSchema() {
             FOREIGN KEY (closeout_id) REFERENCES shift_closeouts(id)
         )`);
 
+        db.run(`CREATE TABLE IF NOT EXISTS visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            source TEXT,
+            session_id TEXT
+        )`);
+
         db.all(`PRAGMA table_info(shift_closeouts)`, [], (err, columns) => {
             if (!err && columns && columns.length > 0) {
                 const colNames = columns.map(c => c.name);
@@ -660,6 +668,39 @@ app.get('/api/promo-codes/status/:code', (req, res) => {
             redeemed_at: row.redeemed_at
         });
     });
+});
+
+// Record incoming page visit with deduplication guardrail (1-hour IP hash check)
+app.post('/api/visits', (req, res) => {
+    let source = req.body.source || 'direct';
+    const referrer = req.headers.referer || '';
+    if (!req.body.source) {
+        if (referrer.includes('facebook.com')) source = 'facebook';
+        else if (referrer.includes('google.com') && referrer.includes('maps')) source = 'google_maps';
+        else if (referrer.includes('google.com')) source = 'google_search';
+        else if (referrer.includes('instagram.com')) source = 'instagram';
+        else if (referrer.includes('tiktok.com')) source = 'tiktok';
+    }
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    const ipHash = crypto.createHash('md5').update(clientIp).digest('hex');
+
+    db.get(
+    `SELECT id FROM visits WHERE session_id = ? AND source = ? AND timestamp >= datetime('now', '-1 hour')`,
+    [ipHash, source],
+    (err, row) => {
+        if (row) {
+            return res.json({ success: true, counted: false });
+        }
+        db.run(
+            `INSERT INTO visits (source, session_id) VALUES (?, ?)`,
+            [source, ipHash],
+            function(err) {
+                if (err) return res.status(500).json({ success: false });
+                res.json({ success: true, counted: true });
+            }
+        );
+    }
+);
 });
 
 /* ===========================================================================
@@ -957,6 +998,37 @@ app.post('/api/admin/promo-codes/verify-redeem', requireAuth, (req, res) => {
                 });
             }
         );
+    });
+});
+
+// Admin Visitor Analytics & Traffic Sources API
+app.get('/api/admin/visit-stats', requireAuth, (req, res) => {
+    db.get(`SELECT COUNT(*) as today FROM visits WHERE DATE(timestamp) = DATE('now')`, [], (err, todayRow) => {
+        db.get(`SELECT COUNT(*) as week FROM visits WHERE timestamp >= datetime('now', '-7 days')`, [], (err, weekRow) => {
+            db.get(`SELECT COUNT(*) as month FROM visits WHERE timestamp >= datetime('now', '-30 days')`, [], (err, monthRow) => {
+                db.all(`SELECT source, COUNT(*) as count FROM visits GROUP BY source`, [], (err, sourceRows) => {
+                    db.all(`SELECT DATE(timestamp) as date, COUNT(*) as count FROM visits WHERE timestamp >= datetime('now', '-7 days') GROUP BY DATE(timestamp) ORDER BY date ASC`, [], (err, dailyRows) => {
+                        db.all(`SELECT strftime('%Y-%W', timestamp) as week, COUNT(*) as count FROM visits WHERE timestamp >= datetime('now', '-56 days') GROUP BY week ORDER BY week ASC`, [], (err, weeklyRows) => {
+                            db.all(`SELECT strftime('%Y-%m', timestamp) as month, COUNT(*) as count FROM visits WHERE timestamp >= datetime('now', '-365 days') GROUP BY month ORDER BY month ASC`, [], (err, monthlyRows) => {
+                                res.json({
+                                    totals: {
+                                        today: todayRow ? todayRow.today : 0,
+                                        week: weekRow ? weekRow.week : 0,
+                                        month: monthRow ? monthRow.month : 0
+                                    },
+                                    sources: sourceRows || [],
+                                    chart: {
+                                        daily: dailyRows || [],
+                                        weekly: weeklyRows || [],
+                                        monthly: monthlyRows || []
+                                    }
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
     });
 });
 

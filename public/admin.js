@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Only refresh if the user is logged in and active
         if (currentUser) {
             loadDashboardData();
+            loadVisitorAnalytics(); // <--- ADDED THIS LINE HERE
             
             // If viewing active vouchers tab, refresh it
             const activeVouchersPane = document.getElementById('promo-subtab-active');
@@ -31,6 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const inventoryPane = document.getElementById('tab-inventory');
             if (inventoryPane && inventoryPane.style.display !== 'none') {
                 loadInventoryItems();
+            }
+
+            // 🔄 If viewing menu catalog tab, refresh table silently if user is not typing in the add form
+            const menuPane = document.getElementById('tab-menu');
+            if (menuPane && menuPane.style.display !== 'none') {
+                if (!document.activeElement || !document.activeElement.closest('#tab-menu form')) {
+                    silentRefreshMenuCatalog();
+                }
             }
         }
     }, 10000); // 10000 ms = 10 seconds
@@ -551,9 +560,10 @@ function loadDashboardData() {
                 }).join('');
             }
         }
+        loadVisitorAnalytics(); // <--- ADDED THIS LINE HERE
     })
     .catch(err => console.error('Dashboard concurrent data fetch error:', err));
-}
+}   
 
 /* ===========================================================================
    2. CASHIER PROMO CODE VERIFICATION
@@ -2194,4 +2204,116 @@ function formatLocalDate(dateStr) {
         isoStr = isoStr.replace(' ', 'T') + 'Z';
     }
     return new Date(isoStr).toLocaleString();
+}
+
+let visitorChartInstance = null;
+let currentVisitorStatsData = null;
+let currentVisitorView = 'daily';
+
+function switchVisitorChartTab(view, btn) {
+    currentVisitorView = view;
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (currentVisitorStatsData) {
+        renderVisitorChart(currentVisitorStatsData, view);
+    }
+}
+
+function loadVisitorAnalytics() {
+    fetch('/api/admin/visit-stats')
+        .then(res => res.json())
+        .then(data => {
+            currentVisitorStatsData = data;
+            if (data && data.totals) {
+                const todayEl = document.getElementById('visitor-kpi-today');
+                const weekEl = document.getElementById('visitor-kpi-week');
+                const monthEl = document.getElementById('visitor-kpi-month');
+                if (todayEl) todayEl.textContent = data.totals.today || 0;
+                if (weekEl) weekEl.textContent = data.totals.week || 0;
+                if (monthEl) monthEl.textContent = data.totals.month || 0;
+            }
+
+            if (data && data.sources) {
+                const breakdownEl = document.getElementById('visitor-source-breakdown');
+                if (breakdownEl) {
+                    const totalVisits = data.sources.reduce((acc, curr) => acc + curr.count, 0) || 1;
+                    breakdownEl.innerHTML = data.sources.map(s => {
+                        const pct = Math.round((s.count / totalVisits) * 100);
+                        return `
+                            <div style="background: var(--alt-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--light-accent); text-align: center; box-sizing: border-box;">
+                                <div style="font-size: 0.75rem; color: #666; text-transform: uppercase; font-weight: 700;">${escapeHtml(s.source)}</div>
+                                <div style="font-size: 1.1rem; font-weight: 800; color: var(--primary); margin: 4px 0;">${s.count}</div>
+                                <div style="font-size: 0.72rem; color: #888;">${pct}% of total</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            renderVisitorChart(data, currentVisitorView);
+        })
+        .catch(err => console.error('Error loading visitor analytics:', err));
+}
+
+function renderVisitorChart(data, view) {
+    const canvas = document.getElementById('visitorAnalyticsChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Destroy existing instance to prevent overlap bugs
+    if (visitorChartInstance) {
+        visitorChartInstance.destroy();
+    }
+
+    let labels = [];
+    let counts = [];
+
+    if (view === 'daily' && data.chart && data.chart.daily) {
+        labels = data.chart.daily.map(d => d.date);
+        counts = data.chart.daily.map(d => d.count);
+    } else if (view === 'weekly' && data.chart && data.chart.weekly) {
+        labels = data.chart.weekly.map(w => `Week ${w.week}`);
+        counts = data.chart.weekly.map(w => w.count);
+    } else if (view === 'monthly' && data.chart && data.chart.monthly) {
+        labels = data.chart.monthly.map(m => m.month);
+        counts = data.chart.monthly.map(m => m.count);
+    }
+
+    visitorChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels.length > 0 ? labels : ['No Data'],
+            datasets: [{
+                label: 'Visitor Traffic',
+                data: counts.length > 0 ? counts : [0],
+                borderColor: '#8B4513',
+                backgroundColor: 'rgba(139, 69, 19, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+        }
+    });
+}
+
+// 🔄 Silent background menu catalog refresher (Preserves search queries, sort orders & active form inputs)
+function silentRefreshMenuCatalog() {
+    fetch('/api/menu')
+        .then(res => res.json())
+        .then(items => {
+            allMenuItems = items || [];
+            filterAndSortMenuCatalog();
+        })
+        .catch(() => {});
 }

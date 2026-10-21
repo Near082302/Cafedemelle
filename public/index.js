@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAboutStatsCounter();
   initPromoForm();
   initPrivacyModal();
+  trackPageVisit();
 });
 
 setInterval(async () => {
@@ -521,6 +522,8 @@ function openItemDetailModal(itemId) {
   const desc = document.getElementById('modal-item-desc');
   const optionsContainer = document.getElementById('modal-options-container');
 
+  fetch(`/api/menu/${itemId}/view`, { method: 'POST' }).catch(() => {});
+
   if (img) img.src = item.image_url || item.image || 'images/Logo.jpg';
   if (category) category.textContent = item.category || 'Specialty';
   if (name) name.textContent = item.name;
@@ -867,4 +870,25 @@ function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function trackPageVisit() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    let source = urlParams.get('utm_source');
+    if (!source) {
+      const ref = document.referrer.toLowerCase();
+      if (ref.includes('facebook.com')) source = 'facebook';
+      else if (ref.includes('google.com') && ref.includes('maps')) source = 'google_maps';
+      else if (ref.includes('google.com')) source = 'google_search';
+      else if (ref.includes('instagram.com')) source = 'instagram';
+      else if (ref.includes('tiktok.com')) source = 'tiktok';
+      else source = 'direct';
+    }
+    fetch('/api/visits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source })
+    }).catch(() => {}); // Fail silently if offline so it never breaks landing performance
+  } catch (e) {}
 }

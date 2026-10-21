@@ -6,6 +6,7 @@
     <title>Executive Manager Portal - Cafe de Melle</title>
     <link rel="stylesheet" href="/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -160,6 +161,45 @@
                 <div class="kpi-card" style="border-left-color: var(--danger);">
                     <h3>Supply Warnings</h3>
                     <div class="number" id="kpi-inventory-alerts" style="color: var(--danger);">0</div>
+                </div>
+            </div>
+
+            <!-- Visitor Analytics & Traffic Sources Card -->
+            <div class="panel-card" style="margin-top: 25px; max-width: 100%; box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <h2><i class="fa-solid fa-chart-pie"></i> Visitor Analytics &amp; Traffic Sources</h2>
+                    <div class="custom-pill-selector" id="visitor-chart-pills">
+                        <button type="button" class="pill-btn active" onclick="switchVisitorChartTab('daily', this)">Daily</button>
+                        <button type="button" class="pill-btn" onclick="switchVisitorChartTab('weekly', this)">Weekly</button>
+                        <button type="button" class="pill-btn" onclick="switchVisitorChartTab('monthly', this)">Monthly</button>
+                    </div>
+                </div>
+
+                <!-- Segmented KPI Row -->
+                <div class="kpi-grid" style="margin-bottom: 20px;">
+                    <div class="kpi-card">
+                        <h3>Today's Visits</h3>
+                        <div class="number" id="visitor-kpi-today">0</div>
+                        <div class="matrix-tile-subtext">Traffic pulse</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>This Week</h3>
+                        <div class="number" id="visitor-kpi-week">0</div>
+                        <div class="matrix-tile-subtext">Rolling 7 days</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>This Month</h3>
+                        <div class="number" id="visitor-kpi-month">0</div>
+                        <div class="matrix-tile-subtext">Rolling 30 days</div>
+                    </div>
+                </div>
+
+                <!-- Traffic Source Breakdown Legend -->
+                <div id="visitor-source-breakdown" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px;"></div>
+
+                <!-- Responsive Canvas Wrapper (Guarantees zero horizontal overflow on mobile) -->
+                <div style="position: relative; width: 100%; height: 280px; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+                    <canvas id="visitorAnalyticsChart"></canvas>
                 </div>
             </div>
 
