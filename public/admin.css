@@ -1758,3 +1758,48 @@ select:focus,
     }
 }
 
+/* ===========================================================================
+   SURGICAL FIX: MOBILE RESPONSIVE PILL GROUPS & CHART THEME
+   =========================================================================== */
+.pill-btn-group {
+    display: flex;
+    flex-direction: column; /* Stack vertically on mobile */
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 12px;
+}
+
+.pill-btn-group .pill-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 20px;
+    border: 1.5px solid var(--secondary);
+    background-color: #ffffff;
+    color: var(--text-dark);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: all 0.2s ease-in-out;
+}
+
+.pill-btn-group .pill-btn.active {
+    background-color: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0, 75, 0, 0.18);
+}
+
+/* Desktop override: side-by-side */
+@media (min-width: 768px) {
+    .pill-btn-group {
+        flex-direction: row;
+    }
+    .pill-btn-group .pill-btn {
+        flex: 1;
+    }
+}

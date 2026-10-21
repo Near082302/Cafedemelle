@@ -2281,30 +2281,33 @@ function renderVisitorChart(data, view) {
     }
 
     visitorChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels.length > 0 ? labels : ['No Data'],
-            datasets: [{
-                label: 'Visitor Traffic',
-                data: counts.length > 0 ? counts : [0],
-                borderColor: '#8B4513',
-                backgroundColor: 'rgba(139, 69, 19, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.3
-            }]
+    type: 'line',
+    data: {
+        labels: labels.length > 0 ? labels : ['No Data'],
+        datasets: [{
+            label: 'Visitor Traffic',
+            data: counts.length > 0 ? counts : [0],
+            borderColor: '#5A3825', // Deep Coffee Brown matching theme
+            backgroundColor: 'rgba(90, 56, 37, 0.08)', // Soft warm fade
+            borderWidth: 3,
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: '#D4A84F', // Honey Gold points
+            pointBorderColor: '#5A3825',
+            pointRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 } }
-            }
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } }
         }
-    });
+    }
+});
 }
 
 // 🔄 Silent background menu catalog refresher (Preserves search queries, sort orders & active form inputs)

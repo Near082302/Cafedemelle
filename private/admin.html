@@ -168,11 +168,11 @@
             <div class="panel-card" style="margin-top: 25px; max-width: 100%; box-sizing: border-box;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
                     <h2><i class="fa-solid fa-chart-pie"></i> Visitor Analytics &amp; Traffic Sources</h2>
-                    <div class="custom-pill-selector" id="visitor-chart-pills">
-                        <button type="button" class="pill-btn active" onclick="switchVisitorChartTab('daily', this)">Daily</button>
-                        <button type="button" class="pill-btn" onclick="switchVisitorChartTab('weekly', this)">Weekly</button>
-                        <button type="button" class="pill-btn" onclick="switchVisitorChartTab('monthly', this)">Monthly</button>
-                    </div>
+                    <div class="pill-btn-group" id="visitor-chart-pills">
+    <button type="button" class="pill-btn active" onclick="switchVisitorChartTab('daily', this)">Daily</button>
+    <button type="button" class="pill-btn" onclick="switchVisitorChartTab('weekly', this)">Weekly</button>
+    <button type="button" class="pill-btn" onclick="switchVisitorChartTab('monthly', this)">Monthly</button>
+</div>
                 </div>
 
                 <!-- Segmented KPI Row -->
@@ -795,15 +795,15 @@
                         </div>
                        <div class="form-group">
     <label>Badge Highlight:</label>
-    <div class="custom-pill-selector" id="badge-pill-group">
-        <button type="button" class="pill-btn active" data-value="none" onclick="selectBadge('none', this)">None</button>
-        <button type="button" class="pill-btn" data-value="signature" onclick="selectBadge('signature', this)">
-            <i class="fa-solid fa-heart" style="color:var(--primary);"></i> Cafe Signature
-        </button>
-        <button type="button" class="pill-btn" data-value="favorite" onclick="selectBadge('favorite', this)">
-            <i class="fa-solid fa-star" style="color:var(--gold);"></i> Customer Favorite
-        </button>
-    </div>
+    <div class="pill-btn-group" id="badge-pill-group">
+    <button type="button" class="pill-btn active" data-value="none" onclick="selectBadge('none', this)">None</button>
+    <button type="button" class="pill-btn" data-value="signature" onclick="selectBadge('signature', this)">
+        <i class="fa-solid fa-heart" style="color:var(--primary);"></i> Cafe Signature
+    </button>
+    <button type="button" class="pill-btn" data-value="favorite" onclick="selectBadge('favorite', this)">
+        <i class="fa-solid fa-star" style="color:var(--gold);"></i> Customer Favorite
+    </button>
+</div>
     <!-- Hidden input to retain form submission compatibility -->
     <input type="hidden" name="badge" id="selected-badge-input" value="none">
 </div>
