@@ -3,4 +3,4 @@ node_modules/
 cafe.db
 public/uploads/*
 !public/uploads/.gitkeep
-databse.sqlite
+database.sqlite
