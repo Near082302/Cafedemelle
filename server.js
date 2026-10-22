@@ -287,17 +287,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('❌ DATABASE CONNECTION ERROR:', err.message);
     } else {
         console.log('✅ Connected to SQLite database.');
-        initDatabaseSchema() 
-        db.all(`PRAGMA table_info(promo_codes)`, [], (err, columns) => {
-    if (!err && columns && columns.length > 0) {
-        const colNames = columns.map(c => c.name);
-        if (!colNames.includes('redeemed_by')) {
-            db.run(`ALTER TABLE promo_codes ADD COLUMN redeemed_by TEXT DEFAULT 'Staff / Cashier'`, () => {
-                console.log("🛠️ Migrated DB: Added 'redeemed_by' column to promo_codes table.");
-            });
-        }
-    }
-});;
+        initDatabaseSchema();
     }
 });
 
@@ -313,6 +303,7 @@ function initDatabaseSchema() {
             image TEXT,
             is_available INTEGER DEFAULT 1,
             view_count INTEGER DEFAULT 0,
+            display_order INTEGER DEFAULT 0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
@@ -321,7 +312,8 @@ function initDatabaseSchema() {
             tag TEXT,
             title TEXT,
             subtitle TEXT,
-            image TEXT
+            image TEXT,
+            display_order INTEGER DEFAULT 0
         )`);
 
         db.run(`CREATE TABLE IF NOT EXISTS settings (
@@ -345,17 +337,17 @@ function initDatabaseSchema() {
         )`);
 
         db.run(`CREATE TABLE IF NOT EXISTS promo_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT UNIQUE NOT NULL,
-    customer_name TEXT NOT NULL,
-    social_handle TEXT,
-    contact_info TEXT,
-    platform TEXT DEFAULT 'Web App',
-    status TEXT DEFAULT 'Active',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    redeemed_at DATETIME,
-    redeemed_by TEXT DEFAULT 'STAFF / CASHIER'
-)`);
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            customer_name TEXT NOT NULL,
+            social_handle TEXT,
+            contact_info TEXT,
+            platform TEXT DEFAULT 'Web App',
+            status TEXT DEFAULT 'Active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            redeemed_at DATETIME,
+            redeemed_by TEXT DEFAULT 'STAFF / CASHIER'
+        )`);
 
         db.run(`CREATE TABLE IF NOT EXISTS inventory_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -426,6 +418,38 @@ function initDatabaseSchema() {
             source TEXT,
             session_id TEXT
         )`);
+
+        // Automatic DB Migrations for Existing Databases
+        db.all(`PRAGMA table_info(menu_items)`, [], (err, columns) => {
+    if (!err && columns && columns.length > 0) {
+        const colNames = columns.map(c => c.name);
+        if (!colNames.includes('priority_rank')) {
+            db.run(`ALTER TABLE menu_items ADD COLUMN priority_rank INTEGER DEFAULT 0`, () => {
+                console.log("🛠️ Migrated DB: Added 'priority_rank' column to menu_items table.");
+            });
+        }
+    }
+});
+
+       db.all(`PRAGMA table_info(hero_slides)`, [], (err, columns) => {
+    if (!err && columns && columns.length > 0) {
+        const colNames = columns.map(c => c.name);
+        if (!colNames.includes('display_order')) {
+            db.run(`ALTER TABLE hero_slides ADD COLUMN display_order INTEGER DEFAULT 0`);
+        }
+    }
+});
+
+        db.all(`PRAGMA table_info(promo_codes)`, [], (err, columns) => {
+            if (!err && columns && columns.length > 0) {
+                const colNames = columns.map(c => c.name);
+                if (!colNames.includes('redeemed_by')) {
+                    db.run(`ALTER TABLE promo_codes ADD COLUMN redeemed_by TEXT DEFAULT 'Staff / Cashier'`, () => {
+                        console.log("🛠️ Migrated DB: Added 'redeemed_by' column to promo_codes table.");
+                    });
+                }
+            }
+        });
 
         db.all(`PRAGMA table_info(shift_closeouts)`, [], (err, columns) => {
             if (!err && columns && columns.length > 0) {
@@ -545,7 +569,7 @@ function logAudit(action, details, user = 'System') {
 }
 
 function touchMenuUpdateTimestamp() {
-    const now = new Date().toLocaleString(); // or use SQLite's datetime('now', 'localtime') directly in the SQL query
+    const now = new Date().toLocaleString();
     db.run(`INSERT INTO settings (key, value) VALUES ('menu_last_updated', ?) ON CONFLICT(key) DO UPDATE SET value = ?`, [now, now]);
 }
 
@@ -554,7 +578,14 @@ function touchMenuUpdateTimestamp() {
    =========================================================================== */
 
 app.get('/api/menu', (req, res) => {
-    db.all(`SELECT * FROM menu_items ORDER BY id DESC`, [], (err, rows) => {
+    db.all(`SELECT * FROM menu_items ORDER BY display_order ASC, id DESC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Database query error' });
+        res.json(rows);
+    });
+});
+
+app.get('/api/hero-slides', (req, res) => {
+    db.all(`SELECT * FROM hero_slides ORDER BY display_order ASC, id DESC`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: 'Database query error' });
         res.json(rows);
     });
@@ -565,13 +596,6 @@ app.post('/api/menu/:id/view', (req, res) => {
     db.run(`UPDATE menu_items SET view_count = view_count + 1 WHERE id = ?`, [itemId], function(err) {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
-    });
-});
-
-app.get('/api/hero-slides', (req, res) => {
-    db.all(`SELECT * FROM hero_slides ORDER BY id DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Database query error' });
-        res.json(rows);
     });
 });
 
@@ -587,10 +611,8 @@ app.get('/api/settings', (req, res) => {
 // 1. Promo Claim Endpoint with Duplicate Guardrail
 app.post('/api/promo-codes/claim', promoLimiter, normalizePromoInput, validatePromoSubmission, (req, res) => {
     const { customer_name, social_handle, contact_info, platform } = req.body;
-
     const cleanName = customer_name.trim().toLowerCase();
 
-    // Guardrail: Check if customer name or social handle has already claimed a voucher
     db.get(
         `SELECT * FROM promo_codes WHERE LOWER(customer_name) = ? OR (social_handle IS NOT NULL AND social_handle != '' AND social_handle = ?)`, 
         [cleanName, encryptPII(social_handle || '')], 
@@ -615,8 +637,8 @@ app.post('/api/promo-codes/claim', promoLimiter, normalizePromoInput, validatePr
 
             db.all(`PRAGMA table_info(promo_codes)`, [], (err, cols) => {
                 let fields = ['code', 'customer_name', 'social_handle', 'contact_info', 'platform', 'status', 'created_at'];
-let placeholders = ['?', '?', '?', '?', '?', '?', '?'];
-let values = [code, customer_name, encSocial, encContact, platform || 'Web App', 'Active', new Date().toISOString()];
+                let placeholders = ['?', '?', '?', '?', '?', '?', '?'];
+                let values = [code, customer_name, encSocial, encContact, platform || 'Web App', 'Active', new Date().toISOString()];
 
                 if (!err && cols) {
                     cols.forEach(col => {
@@ -685,22 +707,22 @@ app.post('/api/visits', (req, res) => {
     const ipHash = crypto.createHash('md5').update(clientIp).digest('hex');
 
     db.get(
-    `SELECT id FROM visits WHERE session_id = ? AND source = ? AND timestamp >= datetime('now', '-1 hour')`,
-    [ipHash, source],
-    (err, row) => {
-        if (row) {
-            return res.json({ success: true, counted: false });
-        }
-        db.run(
-            `INSERT INTO visits (source, session_id) VALUES (?, ?)`,
-            [source, ipHash],
-            function(err) {
-                if (err) return res.status(500).json({ success: false });
-                res.json({ success: true, counted: true });
+        `SELECT id FROM visits WHERE session_id = ? AND source = ? AND timestamp >= datetime('now', '-1 hour')`,
+        [ipHash, source],
+        (err, row) => {
+            if (row) {
+                return res.json({ success: true, counted: false });
             }
-        );
-    }
-);
+            db.run(
+                `INSERT INTO visits (source, session_id) VALUES (?, ?)`,
+                [source, ipHash],
+                function(err) {
+                    if (err) return res.status(500).json({ success: false });
+                    res.json({ success: true, counted: true });
+                }
+            );
+        }
+    );
 });
 
 /* ===========================================================================
@@ -765,7 +787,6 @@ app.get('/api/admin/me', requireAuth, (req, res) => {
     });
 });
 
-// Dedicated Helper Route for Password Re-Authentication Guardrail
 app.post('/api/admin/verify-password', requireAuth, (req, res) => {
     const { password } = req.body;
     const userId = req.session.userId;
@@ -981,7 +1002,6 @@ app.post('/api/admin/promo-codes/verify-redeem', requireAuth, (req, res) => {
             return res.status(400).json({ success: false, error: `Voucher ${cleanCode} has already been redeemed!` });
         }
 
-        // Generate precise ISO string so JS parses it cleanly without shifting hours
         const exactTimestamp = new Date().toISOString();
 
         db.run(
@@ -1001,7 +1021,6 @@ app.post('/api/admin/promo-codes/verify-redeem', requireAuth, (req, res) => {
     });
 });
 
-// Admin Visitor Analytics & Traffic Sources API
 app.get('/api/admin/visit-stats', requireAuth, (req, res) => {
     db.get(`SELECT COUNT(*) as today FROM visits WHERE DATE(timestamp) = DATE('now')`, [], (err, todayRow) => {
         db.get(`SELECT COUNT(*) as week FROM visits WHERE timestamp >= datetime('now', '-7 days')`, [], (err, weekRow) => {
@@ -1074,7 +1093,6 @@ app.post('/api/admin/inventory', requireAuth, (req, res) => {
     );
 });
 
-// PATCH Route to Update Unit Cost and Safety Threshold for Container Overview
 app.patch('/api/admin/inventory/:id', requireAuth, (req, res) => {
     const itemId = req.params.id;
     const { item_cost, safety_threshold } = req.body;
@@ -1341,7 +1359,7 @@ app.post('/api/admin/inventory/close-shift', requireAuth, (req, res) => {
 });
 
 app.get('/api/admin/invoices', requireAuth, (req, res) => {
-    const { date, supplier } = req.query;
+    const { start_date, end_date, supplier } = req.query;
     let query = `
         SELECT s.*, i.item_name
         FROM stock_shipments s
@@ -1350,9 +1368,13 @@ app.get('/api/admin/invoices', requireAuth, (req, res) => {
     `;
     const params = [];
 
-    if (date) {
-        query += ` AND DATE(s.timestamp) = DATE(?)`;
-        params.push(date);
+    if (start_date) {
+        query += ` AND DATE(s.timestamp) >= DATE(?)`;
+        params.push(start_date);
+    }
+    if (end_date) {
+        query += ` AND DATE(s.timestamp) <= DATE(?)`;
+        params.push(end_date);
     }
     if (supplier) {
         query += ` AND s.supplier_name LIKE ?`;
@@ -1498,6 +1520,20 @@ app.patch('/api/admin/menu/:id/toggle', requireAuth, (req, res) => {
     });
 });
 
+app.patch('/api/admin/menu/:id/priority', requireAuth, (req, res) => {
+    const itemId = req.params.id;
+    const { priority_rank } = req.body;
+    const performer = getActiveUser(req);
+    const rankVal = parseInt(priority_rank, 10) || 0;
+
+    db.run(`UPDATE menu_items SET priority_rank = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rankVal, itemId], function(err) {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        touchMenuUpdateTimestamp();
+        logAudit('MENU_PRIORITY_UPDATE', `Updated priority rank for menu item [ID: ${itemId}] to ${rankVal}`, performer);
+        res.json({ success: true });
+    });
+});
+
 app.delete('/api/admin/menu/:id', requireAdminOrAbove, (req, res) => {
     const itemId = req.params.id;
     const performer = getActiveUser(req);
@@ -1602,7 +1638,6 @@ app.get('/api/admin/promo-codes/history', requireAuth, (req, res) => {
     });
 });
 
-// RA 10173 Compliance: Daily Auto-Anonymization of PII after 30 days
 function autoAnonymizeExpiredPII() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     db.run(
@@ -1615,8 +1650,64 @@ function autoAnonymizeExpiredPII() {
         }
     );
 }
-// Run once every 24 hours
 setInterval(autoAnonymizeExpiredPII, 24 * 60 * 60 * 1000);
+
+app.post('/api/admin/menu/:id/reorder', requireAuth, (req, res) => {
+    const itemId = req.params.id;
+    const { direction } = req.body;
+    const performer = getActiveUser(req);
+
+    db.get(`SELECT id, display_order FROM menu_items WHERE id = ?`, [itemId], (err, current) => {
+        if (!current) return res.status(404).json({ success: false, error: 'Menu item not found.' });
+
+        const currentOrder = current.display_order || 0;
+        const targetQuery = direction === 'up'
+            ? `SELECT id, display_order FROM menu_items WHERE display_order < ? ORDER BY display_order DESC LIMIT 1`
+            : `SELECT id, display_order FROM menu_items WHERE display_order > ? ORDER BY display_order ASC LIMIT 1`;
+
+        db.get(targetQuery, [currentOrder], (err, neighbor) => {
+            if (neighbor) {
+                db.serialize(() => {
+                    db.run(`UPDATE menu_items SET display_order = ? WHERE id = ?`, [neighbor.display_order, current.id]);
+                    db.run(`UPDATE menu_items SET display_order = ? WHERE id = ?`, [current.display_order, neighbor.id]);
+                    touchMenuUpdateTimestamp();
+                    logAudit('MENU_REORDER', `Reordered menu item ID ${itemId} ${direction}`, performer);
+                    res.json({ success: true });
+                });
+            } else {
+                res.json({ success: true, message: 'Already at boundary limit.' });
+            }
+        });
+    });
+});
+
+app.post('/api/admin/hero-slides/:id/reorder', requireAuth, (req, res) => {
+    const slideId = req.params.id;
+    const { direction } = req.body;
+    const performer = getActiveUser(req);
+
+    db.get(`SELECT id, display_order FROM hero_slides WHERE id = ?`, [slideId], (err, current) => {
+        if (!current) return res.status(404).json({ success: false, error: 'Slide not found.' });
+
+        const currentOrder = current.display_order || 0;
+        const targetQuery = direction === 'up'
+            ? `SELECT id, display_order FROM hero_slides WHERE display_order < ? ORDER BY display_order DESC LIMIT 1`
+            : `SELECT id, display_order FROM hero_slides WHERE display_order > ? ORDER BY display_order ASC LIMIT 1`;
+
+        db.get(targetQuery, [currentOrder], (err, neighbor) => {
+            if (neighbor) {
+                db.serialize(() => {
+                    db.run(`UPDATE hero_slides SET display_order = ? WHERE id = ?`, [neighbor.display_order, current.id]);
+                    db.run(`UPDATE hero_slides SET display_order = ? WHERE id = ?`, [current.display_order, neighbor.id]);
+                    logAudit('HERO_REORDER', `Reordered hero slide ID ${slideId} ${direction}`, performer);
+                    res.json({ success: true });
+                });
+            } else {
+                res.json({ success: true });
+            }
+        });
+    });
+});
 
 /* ===========================================================================
    13. SERVER INIT & LISTENER
@@ -1627,4 +1718,3 @@ app.listen(PORT, () => {
     console.log(`🌐 Local Access: http://localhost:${PORT}`);
     console.log(`🔑 Admin Portal: http://localhost:${PORT}/admin`);
 });
-

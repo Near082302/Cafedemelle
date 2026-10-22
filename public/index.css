@@ -351,56 +351,159 @@ body {
   color: var(--light-accent);
 }
 
-/* ANNOUNCEMENT HERO SLIDER SECTION BELOW MAIN HERO (MOBILE TOUCH SWIPE READY) */
+/* ===========================================================================
+   ANNOUNCEMENT HERO SLIDER (UNIFORM SPLIT CARD LAYOUT)
+   =========================================================================== */
+/* ===========================================================================
+   SURGICAL FIX: UNIFORM ANNOUNCEMENT CARDS & EDGE-TO-EDGE IMAGES
+   =========================================================================== */
+
 .announcement-bar-section {
-  background-color: #002200;
-  border-top: 2px solid var(--gold);
-  border-bottom: 2px solid var(--gold);
-  padding: 30px 0;
+  background-color: var(--alt-bg);
+  padding: 40px 20px;
   position: relative;
   overflow: hidden;
+  width: 100%;
 }
 
 .announcement-wrapper {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   position: relative;
-  min-height: 220px;
-  padding: 0 15px;
+  overflow: hidden !important;
+  border-radius: 22px;
 }
 
 .hero-slider {
   position: relative;
   width: 100%;
-  overflow: hidden;
-  border-radius: 20px;
+  overflow: hidden !important;
+  border-radius: 22px;
   touch-action: pan-y;
-  user-select: none;
 }
 
 .hero-slider-track {
   display: flex;
   width: 100%;
   transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+  align-items: stretch; /* Forces all slides to match height */
 }
 
 .hero-slide {
-  min-width: 100%;
-  width: 100%;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  flex-shrink: 0;
+  min-width: 100% !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
   position: relative;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex;
+}
+
+/* UNIFORM CARD HEIGHT & LAYOUT */
+.announcement-card-split {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  background: var(--card-bg);
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.09);
+  border: 1px solid var(--light-accent);
+  width: 100%;
+  height: 410px; /* Locked uniform height for all slides */
+}
+
+/* EDGE-TO-EDGE IMAGE FILL (NO WEAK GAPS) */
+.announcement-img-col {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #FAF8F2;
+  overflow: hidden;
+}
+
+.announcement-img-col img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover !important; /* Seamless edge-to-edge fill */
+  object-position: center;
+  display: block;
+}
+
+.announcement-text-col {
+  padding: 32px 36px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 40px 20px 50px 20px;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  align-items: flex-start;
+  text-align: left;
+  height: 100%;
+  overflow-y: hidden; /* Prevents internal scrollbars */
+}
+
+/* MOBILE RESPONSIVE FIX */
+@media (max-width: 768px) {
+  .announcement-card-split {
+    grid-template-columns: 1fr;
+    height: auto !important; /* Locked uniform mobile height */
+    min-height: unset;
+  }
+
+  .announcement-img-col {
+    height: 220px !important;
+    min-height: 200px;
+  }
+
+  .announcement-text-col {
+    padding: 24 20px !important;
+    align-items: center;
+    text-align: center;
+    height: auto !important;
+  }
+}
+
+.hero-slider {
+  position: relative;
+  width: 100%;
+  overflow: hidden; /* Ensures only one slide is shown at a time */
+  border-radius: 22px;
+  touch-action: pan-y;
+}
+
+.hero-slider-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+/* ===========================================================================
+   CLEAN SINGLE-SHOWING SLIDE OVERRIDE
+   =========================================================================== */
+.hero-slider {
+  position: relative;
+  width: 100%;
+  overflow: hidden !important; /* Forces strict cropping */
+  border-radius: 22px;
+  touch-action: pan-y;
+}
+
+.hero-slider-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.hero-slide {
+  min-width: 100% !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+  position: relative;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .hero-overlay {
@@ -850,7 +953,7 @@ body {
 }
 
 /* ===========================================================================
-   7.1 MENU ITEM DETAIL MODAL STYLES (FULLY RESPONSIVE & MOBILE ACCESSIBLE)
+   7.1 MENU ITEM DETAIL MODAL STYLES (FIXED SCROLL, STICKY BUTTONS & CONTAIN)
    =========================================================================== */
 .modal-overlay {
   position: fixed;
@@ -860,80 +963,55 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
 
 .modal-overlay.hide { display: none !important; }
 
-.modal-card {
-  background-color: #ffffff;
-  border-radius: var(--card-radius);
-  max-width: 540px;
-  width: 100%;
-  padding: 28px 24px;
-  position: relative;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  text-align: left;
-  border: 2px solid var(--gold);
-}
-
-.modal-close-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.5);
-  color: #ffffff;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 30;
-  transition: var(--transition-smooth);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-.modal-close-btn:hover {
-  background: var(--primary);
-  color: #ffffff;
-  transform: scale(1.08);
-}
-
 .menu-detail-modal-card {
-  max-width: 780px;
+  max-width: 760px;
   width: 95%;
-  max-height: 90vh;
+  max-height: 88vh;
+  height: auto;
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border-radius: 20px;
+  background-color: #ffffff;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+  border: 2px solid var(--gold);
 }
 
 .item-detail-grid {
   display: grid;
-  grid-template-columns: 440px 1fr;
+  grid-template-columns: 1fr 1.1fr;
   width: 100%;
-  max-height: 85vh;
+  max-height: calc(88vh - 4px);
   overflow: hidden;
 }
 
+/* Image Box: object-fit: contain ensures BOTH landscape and portrait photos never crop */
+/* Desktop / PC Base Styles */
 .item-detail-image-box {
   position: relative;
+  background-color: #FAF8F2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0; /* Removed padding so image spans edge-to-edge */
+  width: 100%;
   height: 100%;
   min-height: 320px;
-  background-color: #FAF8F2;
+  overflow: hidden;
 }
 
 .item-detail-image-box img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover; /* Fills the entire box seamlessly */
   display: block;
   image-rendering: -webkit-optimize-contrast;
 }
@@ -951,14 +1029,15 @@ body {
   z-index: 10;
 }
 
+/* Scrollable text content container */
 .item-detail-content {
-  padding: 32px 36px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   text-align: left;
   overflow-y: auto;
-  max-width: 85vh;
+  max-height: calc(88vh - 20px);
 }
 
 .item-category-pill {
@@ -970,22 +1049,23 @@ body {
   border-radius: 12px;
   width: fit-content;
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .item-detail-title {
   color: var(--primary);
-  font-size: 1.45rem;
+  font-size: 1.35rem;
   font-weight: 800;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   padding-right: 25px;
+  line-height: 1.25;
 }
 
 .item-detail-desc {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: #555;
   line-height: 1.4;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .item-options-box {
@@ -997,10 +1077,10 @@ body {
 }
 
 .options-heading {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--primary);
   font-weight: 800;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1008,7 +1088,7 @@ body {
 
 .size-options-list {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1021,7 +1101,7 @@ body {
   border: 1.5px solid var(--secondary);
   padding: 6px 12px;
   border-radius: 8px;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-dark);
   flex-grow: 1;
 }
@@ -1034,11 +1114,11 @@ body {
 
 .allergen-list {
   list-style: none;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #555;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .allergen-list i {
@@ -1046,34 +1126,79 @@ body {
   margin-right: 4px;
 }
 
+/* STICKY ACTION BUTTONS: Pinned at the bottom so they are NEVER hidden */
 .modal-actions {
   display: flex;
   gap: 10px;
-  margin-top: auto;
-  padding-top: 10px;
+  margin-top: 14px;
+  padding: 12px 0 4px 0;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  background: #ffffff !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 50 !important;
 }
 
-.btn-secondary-modal {
-  background-color: var(--alt-bg);
-  color: var(--chocolate);
-  border: 1px solid var(--light-accent);
+.modal-actions .btn {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 0.85rem;
 }
 
-.btn-secondary-modal:hover {
-  background-color: #e2d7c0;
-}
+/* ===========================================================================
+   MOBILE RESPONSIVENESS FOR MODAL
+   =========================================================================== */
+@media (max-width: 768px) {
+  .menu-detail-modal-card {
+    max-height: 90vh;
+    width: 95%;
+  }
 
-/* MAP CONTAINER */
-.map-container {
-  border-radius: var(--card-radius);
-  overflow: hidden;
-  box-shadow: var(--card-shadow);
-  border: 2px solid var(--light-accent);
-}
+  .item-detail-grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    max-height: calc(90vh - 4px);
+  }
 
-.map-container iframe {
-  border: 0;
-  display: block;
+  /* Full-width hero image container on mobile */
+  .item-detail-image-box {
+    width: 100%;
+    height: 260px; /* Generous height so drinks look large & prominent */
+    min-height: 260px;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Fill 100% of the top width without side gaps */
+  .item-detail-image-box img {
+    width: 100%;
+    height: 100%;
+    max-height: none; /* Removed restrictive max-height cap */
+    object-fit: cover; /* Edge-to-edge beautiful full fill */
+    border-radius: 0;
+  }
+
+  .item-detail-content {
+    padding: 20px 18px;
+    overflow-y: visible;
+    max-height: none;
+  }
+
+  /* Sticky Action Buttons kept pinned at the bottom */
+  .modal-actions {
+    flex-direction: column !important;
+    gap: 8px;
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #ffffff !important;
+    padding: 12px 0 4px 0 !important;
+    box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.06);
+    z-index: 50 !important;
+  }
+
+  .modal-actions .btn {
+    width: 100% !important;
+  }
 }
 
 /* ===========================================================================
@@ -1931,6 +2056,10 @@ footer {
     border-radius: 14px;
   }
 
+  .menu-detail-modal-card .modal-close-btn {
+  display: none !important;
+}
+
   .item-detail-grid {
     grid-template-columns: 1fr;
     max-height: 85vh;
@@ -2008,5 +2137,22 @@ footer {
 
   .page-section {
     padding: 50px 14px;
+  }
+}
+
+/* ===========================================================================
+   CENTER ANNOUNCEMENT BUTTONS ON MOBILE PHONES
+   =========================================================================== */
+.announcement-btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+
+@media (max-width: 768px) {
+  .announcement-btn-row {
+    justify-content: center !important;
+    width: 100%;
   }
 }

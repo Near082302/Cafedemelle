@@ -137,47 +137,53 @@
              =================================================================== -->
         <section class="announcement-bar-section">
             <div class="announcement-wrapper">
+                
+                <!-- Bulletin Board Section Header -->
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <span style="display: inline-flex; align-items: center; gap: 6px; background-color: var(--secondary); color: white; font-weight: 700; font-size: 0.78rem; padding: 4px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                        <i class="fa-solid fa-bullhorn"></i> Bulletin Board
+                    </span>
+                    <h2 style="font-size: clamp(1.5rem, 3vw, 2.1rem); color: var(--primary); font-weight: 800; margin: 0;">Announcements & Updates</h2>
+                </div>
+
+                <!-- Slider Track Container -->
                 <div class="hero-slider" id="hero-slider">
                     <div class="hero-slider-track" id="hero-slider-track">
-                        <!-- Slide 1: Matcha Series -->
-                        <div class="hero-slide active" style="background-image: url('images/matcha.jpeg');">
-                            <div class="hero-overlay"></div>
-                            <div class="hero-content">
-                                <span class="hero-tag">New Seasonal Release</span>
-                                <h1>Try Our Newest Product: The Matcha Series!</h1>
-                                <p>Savor rich ceremonial-grade matcha blended to perfection. Experience our Iced Matcha Latte, Matcha Espresso Fusion, and Creamy Matcha Freeze today!</p>
+                        
+                        <!-- Fallback Slide 1 -->
+                        <div class="hero-slide active">
+                            <div class="announcement-card-split">
+                                <div class="announcement-img-col">
+                                    <img src="images/matcha.jpeg" alt="Matcha Series" onerror="this.src='images/Logo.jpg';">
+                                </div>
+                                <div class="announcement-text-col">
+                                    <span class="hero-tag">New Seasonal Release</span>
+                                    <h1>Try Our Newest Product: The Matcha Series!</h1>
+                                    <p>Savor rich ceremonial-grade matcha blended to perfection. Experience our Iced Matcha Latte, Matcha Espresso Fusion, and Creamy Matcha Freeze today!</p>
+                                    <div class="announcement-btn-row">
+                                        <a href="#menu" class="btn btn-primary-hero"><i class="fa-solid fa-mug-hot"></i> View Menu</a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Slide 2: New Foods -->
-                        <div class="hero-slide" style="background-image: url('images/interior.jpeg');">
-                            <div class="hero-overlay"></div>
-                            <div class="hero-content">
-                                <span class="hero-tag">Fresh From The Kitchen</span>
-                                <h1>New Foods to Try With Friends & Family</h1>
-                                <p>Gather around delicious comfort dishes! Treat your crew to our loaded Cheese Nachos, rich Italian Meatball Spaghetti, and authentic Creamy Bacon Carbonara.</p>
+                        <!-- Fallback Slide 2 -->
+                        <div class="hero-slide">
+                            <div class="announcement-card-split">
+                                <div class="announcement-img-col">
+                                    <img src="images/kgb.jpeg" alt="Korean Garlic Bun" onerror="this.src='images/Logo.jpg';">
+                                </div>
+                                <div class="announcement-text-col">
+                                    <span class="hero-tag" style="background-color: #5A3825;">Daily Specialty</span>
+                                    <h1>Oven-Fresh Breads & Pastry Bundles</h1>
+                                    <p>Pair your espresso with our freshly baked Korean Garlic Buns, savory croissants, and butter rolls baked fresh in-house every morning.</p>
+                                    <div class="announcement-btn-row">
+                                        <a href="#menu" class="btn btn-primary-hero"><i class="fa-solid fa-utensils"></i> Explore Pastries</a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Slide 3: Grab Food Announcement -->
-                        <div class="hero-slide" style="background-image: url('images/maincafe.jpeg');">
-                            <div class="hero-overlay"></div>
-                            <div class="hero-content">
-                                <span class="hero-tag">Delivery Update</span>
-                                <h1>We Are Now Live on GrabFood!</h1>
-                                <p>Craving your favorite coffee and fresh pastries at home or work? Scroll down to our Grab section for step-by-step ordering instructions!</p>
-                            </div>
-                        </div>
-
-                        <!-- Slide 4: Freshly Baked Daily -->
-                        <div class="hero-slide" style="background-image: url('images/kgb.jpeg');">
-                            <div class="hero-overlay"></div>
-                            <div class="hero-content">
-                                <span class="hero-tag">Daily Specialty</span>
-                                <h1>Oven-Fresh Breads & Pastry Bundles</h1>
-                                <p>Pair your espresso with our freshly baked Korean Garlic Buns, savory croissants, and butter rolls baked fresh in-house every morning.</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -185,8 +191,6 @@
                 <div class="slider-dots" id="hero-dots">
                     <span class="dot active" onclick="setSlide(0)"></span>
                     <span class="dot" onclick="setSlide(1)"></span>
-                    <span class="dot" onclick="setSlide(2)"></span>
-                    <span class="dot" onclick="setSlide(3)"></span>
                 </div>
             </div>
         </section>
@@ -312,7 +316,7 @@
         <!-- MENU ITEM DETAIL / FOCUS MODAL -->
         <div id="item-detail-modal" class="modal-overlay hide">
             <div class="modal-card menu-detail-modal-card">
-                <button id="close-item-modal-btn" class="modal-close-btn" aria-label="Close Modal">&times;</button>
+                
                 <div class="item-detail-grid">
                     <div class="item-detail-image-box">
                         <img id="modal-item-img" src="images/Logo.jpg" alt="Menu Item Image">

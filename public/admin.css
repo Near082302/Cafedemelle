@@ -1542,9 +1542,10 @@ select:focus,
     #menu-table-body td:nth-child(2)::before { content: "Name:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #menu-table-body td:nth-child(3)::before { content: "Category:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #menu-table-body td:nth-child(4)::before { content: "Price:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #menu-table-body td:nth-child(5)::before { content: "Status:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #menu-table-body td:nth-child(6)::before { content: "Views:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #menu-table-body td:nth-child(7)::before { content: "Actions:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #menu-table-body td:nth-child(5)::before { content: "Priority:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #menu-table-body td:nth-child(6)::before { content: "Status:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #menu-table-body td:nth-child(7)::before { content: "Views:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #menu-table-body td:nth-child(8)::before { content: "Actions:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
 
     #users-table-body td:nth-child(1)::before { content: "Role ID:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #users-table-body td:nth-child(2)::before { content: "Username:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
@@ -1805,3 +1806,4 @@ select:focus,
         flex: 1;
     }
 }
+

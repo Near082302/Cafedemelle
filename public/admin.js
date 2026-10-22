@@ -57,44 +57,44 @@ function filterAndSortMenuCatalog() {
     const searchInput = document.getElementById('menu-catalog-search');
     const sortSelect = document.getElementById('menu-catalog-sort');
     const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    const sortBy = sortSelect ? sortSelect.value : 'views';
+    const sortBy = sortSelect ? sortSelect.value : 'priority';
 
     let filtered = [...allMenuItems];
 
-   if (currentMenuCategoryFilter !== 'All') {
+    // Category Filtering
+    if (currentMenuCategoryFilter !== 'All') {
         const filterCat = currentMenuCategoryFilter.toLowerCase().trim();
         filtered = filtered.filter(item => {
             const itemCat = (item.category || '').toLowerCase().trim();
-            if (filterCat === 'iced coffee' || filterCat === 'cold coffee') {
-                return itemCat.includes('iced') || itemCat.includes('cold');
-            }
-            if (filterCat === 'hot coffee') {
-                return itemCat.includes('hot');
-            }
-            if (filterCat === 'non-coffee' || filterCat === 'non coffee') {
-                return itemCat.includes('non');
-            }
-            if (filterCat === 'pastries' || filterCat === 'pastry') {
-                return itemCat.includes('pastr');
-            }
-            if (filterCat === 'fruit sodas' || filterCat === 'soda') {
-                return itemCat.includes('soda') || itemCat.includes('fruit');
-            }
+            if (filterCat === 'iced coffee' || filterCat === 'cold coffee') return itemCat.includes('iced') || itemCat.includes('cold');
+            if (filterCat === 'hot coffee') return itemCat.includes('hot');
+            if (filterCat === 'non-coffee' || filterCat === 'non coffee') return itemCat.includes('non');
+            if (filterCat === 'pastries' || filterCat === 'pastry') return itemCat.includes('pastr');
+            if (filterCat === 'fruit sodas' || filterCat === 'soda') return itemCat.includes('soda') || itemCat.includes('fruit');
             return itemCat === filterCat || itemCat.includes(filterCat);
         });
     }
 
+    // Search Query Filtering
     if (query) {
         filtered = filtered.filter(item => item.name.toLowerCase().includes(query) || (item.description && item.description.toLowerCase().includes(query)));
     }
 
-    if (sortBy === 'views') {
-        filtered.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
-    } else if (sortBy === 'alpha') {
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortBy === 'price-asc') {
-        filtered.sort((a, b) => (a.price || 0) - (b.price || 0));
-    }
+    // Sort Logic: Priority items (>0) always stay on top sorted 1, 2, 3, 4; rest sort by filter
+    filtered.sort((a, b) => {
+        const rankA = a.priority_rank || 0;
+        const rankB = b.priority_rank || 0;
+
+        if (rankA > 0 && rankB > 0) return rankA - rankB; // Top choices sorted 1 -> 2 -> 3 -> 4
+        if (rankA > 0) return -1; // Item A is prioritized
+        if (rankB > 0) return 1;  // Item B is prioritized
+
+        // Secondary Sort for non-priority items
+        if (sortBy === 'views') return (b.view_count || 0) - (a.view_count || 0);
+        if (sortBy === 'alpha') return a.name.localeCompare(b.name);
+        if (sortBy === 'price-asc') return (a.price || 0) - (b.price || 0);
+        return (a.display_order || 0) - (b.display_order || 0);
+    });
 
     renderMenuTable(filtered);
 }
@@ -1288,11 +1288,13 @@ function deleteInventoryItem(id) {
    4. OPERATIONAL LEDGERS TAB (EXPORTS, FILTERS & EOD MODAL POPUPS)
    =========================================================================== */
 function loadSupplierInvoices() {
-    const dateFilter = document.getElementById('invoice-date-filter')?.value;
+    const startDate = document.getElementById('invoice-start-date')?.value;
+    const endDate = document.getElementById('invoice-end-date')?.value;
     const supplierFilter = document.getElementById('invoice-supplier-filter')?.value || '';
 
     let url = '/api/admin/invoices?';
-    if (dateFilter) url += `date=${encodeURIComponent(dateFilter)}&`;
+    if (startDate) url += `start_date=${encodeURIComponent(startDate)}&`;
+    if (endDate) url += `end_date=${encodeURIComponent(endDate)}&`;
     if (supplierFilter) url += `supplier=${encodeURIComponent(supplierFilter)}`;
 
     fetch(url)
@@ -1302,7 +1304,7 @@ function loadSupplierInvoices() {
             if (!tbody) return;
 
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888; padding:15px;">No shipment invoices found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888; padding:15px;">No shipment invoices found for this date range.</td></tr>';
                 return;
             }
 
@@ -1326,6 +1328,24 @@ function loadSupplierInvoices() {
             }).join('');
         })
         .catch(err => console.error('Error loading invoices:', err));
+}
+
+function clearShipmentFilters() {
+    const startDate = document.getElementById('invoice-start-date');
+    const endDate = document.getElementById('invoice-end-date');
+    const supplier = document.getElementById('invoice-supplier-filter');
+    if (startDate) startDate.value = '';
+    if (endDate) endDate.value = '';
+    if (supplier) supplier.value = '';
+    loadSupplierInvoices();
+}
+
+function clearCloseoutFilters() {
+    const startDate = document.getElementById('closeout-start-date');
+    const endDate = document.getElementById('closeout-end-date');
+    if (startDate) startDate.value = '';
+    if (endDate) endDate.value = '';
+    loadCloseoutHistory();
 }
 
 function clearSpillageFilters() {
@@ -1599,19 +1619,41 @@ function renderMenuTable(items) {
     if (!tbody) return;
 
     if (!items || items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888; padding:20px;">No menu items found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#888; padding:20px;">No menu items found.</td></tr>';
         return;
     }
 
     const userRole = currentUser ? currentUser.role : 'Staff';
     const isAdminOrAbove = ['Admin', 'Owner', 'Developer'].includes(userRole);
 
-    tbody.innerHTML = items.map(item => `
-        <tr>
+    tbody.innerHTML = items.map(item => {
+        const rankVal = item.priority_rank || 0;
+        const rankLabel = rankVal === 0 ? '-- Normal --' : `#${rankVal} Priority`;
+
+        return `
+        <tr class="${(item.priority_rank || 0) > 0 ? 'priority-pinned-row' : ''}">
             <td><img src="${item.image ? escapeHtml(item.image) : '/images/placeholder.jpg'}" style="width:40px; height:40px; object-fit:cover; border-radius:6px;" onerror="this.src='/images/placeholder.jpg'"></td>
-            <td><strong>${escapeHtml(item.name)}</strong></td>
+            <td>
+                <strong>${escapeHtml(item.name)}</strong>
+                ${(item.priority_rank || 0) > 0 ? `<span class="badge-audit-green" style="font-size:0.7rem; margin-left:5px;"><i class="fa-solid fa-thumbtack"></i> Priority #${item.priority_rank}</span>` : ''}
+            </td>
             <td>${escapeHtml(item.category)}</td>
             <td>₱${parseFloat(item.price).toFixed(2)}</td>
+            <td>
+                <div class="custom-dropdown" style="width: 130px;">
+                    <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)" style="padding: 6px 10px; font-size: 0.85rem;">
+                        <span class="dropdown-selected-text">${rankLabel}</span>
+                        <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                    </div>
+                    <div class="dropdown-menu" style="width: 140px;">
+                        <div class="dropdown-option ${rankVal === 0 ? 'active' : ''}" onclick="selectAndApplyPriority(${item.id}, 0, this)">-- Normal --</div>
+                        <div class="dropdown-option ${rankVal === 1 ? 'active' : ''}" onclick="selectAndApplyPriority(${item.id}, 1, this)">#1 Priority</div>
+                        <div class="dropdown-option ${rankVal === 2 ? 'active' : ''}" onclick="selectAndApplyPriority(${item.id}, 2, this)">#2 Priority</div>
+                        <div class="dropdown-option ${rankVal === 3 ? 'active' : ''}" onclick="selectAndApplyPriority(${item.id}, 3, this)">#3 Priority</div>
+                        <div class="dropdown-option ${rankVal === 4 ? 'active' : ''}" onclick="selectAndApplyPriority(${item.id}, 4, this)">#4 Priority</div>
+                    </div>
+                </div>
+            </td>
             <td>
                 <span class="${item.is_available ? 'badge-audit-green' : 'badge-audit-red'}">
                     ${item.is_available ? 'AVAILABLE' : 'OUT OF STOCK'}
@@ -1629,7 +1671,30 @@ function renderMenuTable(items) {
                 ` : ''}
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
+}
+
+function selectAndApplyPriority(id, rank, optionEl) {
+    selectCustomOption(optionEl, rank);
+    updateItemPriorityRank(id, rank);
+}
+
+function updateItemPriorityRank(id, rank) {
+    fetch(`/api/admin/menu/${id}/priority`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority_rank: rank })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            showToast(`Priority rank updated!`);
+            loadMenuItems();
+        } else {
+            showToast(res.error || 'Failed to update priority rank.', 'error');
+        }
+    });
 }
 
 function handleAddMenuItem(e) {
@@ -1714,11 +1779,15 @@ function loadHeroSlides() {
                             <div style="font-size:0.8rem; color:#666;">${escapeHtml(s.subtitle || '')}</div>
                         </div>
                     </div>
-                    ${isAdminOrAbove ? `
-                        <button class="btn-action btn-danger" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteHeroSlide(${s.id})">
-                            <i class="fa-solid fa-trash"></i> Delete
-                        </button>
-                    ` : ''}
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="btn-action" style="padding:6px 10px; font-size:0.8rem;" onclick="reorderItem(${s.id}, 'up', 'hero')" title="Move Up"><i class="fa-solid fa-arrow-up"></i></button>
+                        <button class="btn-action" style="padding:6px 10px; font-size:0.8rem;" onclick="reorderItem(${s.id}, 'down', 'hero')" title="Move Down"><i class="fa-solid fa-arrow-down"></i></button>
+                        ${isAdminOrAbove ? `
+                            <button class="btn-action btn-danger" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteHeroSlide(${s.id})">
+                                <i class="fa-solid fa-trash"></i> Delete
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
             `).join('');
         })
@@ -2319,4 +2388,23 @@ function silentRefreshMenuCatalog() {
             filterAndSortMenuCatalog();
         })
         .catch(() => {});
+}
+
+function reorderItem(id, direction, type = 'menu') {
+    const endpoint = type === 'menu' ? `/api/admin/menu/${id}/reorder` : `/api/admin/hero-slides/${id}/reorder`;
+    fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            showToast('Priority order updated!');
+            if (type === 'menu') loadMenuItems();
+            else loadHeroSlides();
+        } else {
+            showToast(res.error || 'Failed to reorder.', 'error');
+        }
+    });
 }

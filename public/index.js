@@ -213,14 +213,23 @@ async function initHeroBannerSlider() {
     slides.forEach((slide, idx) => {
       const slideDiv = document.createElement('div');
       slideDiv.className = `hero-slide ${idx === 0 ? 'active' : ''}`;
-      slideDiv.style.backgroundImage = `url('${slide.image || slide.image_url || 'images/Logo.jpg'}')`;
+
+      const imgSrc = slide.image || slide.image_url || 'images/Logo.jpg';
 
       slideDiv.innerHTML = `
-        <div class="hero-overlay"></div>
-        <div class="hero-content">
-          ${slide.tag ? `<span class="hero-tag">${escapeHTML(slide.tag)}</span>` : ''}
-          <h1>${escapeHTML(slide.title)}</h1>
-          ${slide.subtitle ? `<p>${escapeHTML(slide.subtitle)}</p>` : ''}
+        <div class="announcement-card-split">
+            <div class="announcement-img-col">
+                <img src="${escapeHTML(imgSrc)}" alt="${escapeHTML(slide.title || 'Announcement')}" onerror="this.src='images/Logo.jpg';">
+            </div>
+            <div class="announcement-text-col">
+                ${slide.tag ? `<span class="hero-tag">${escapeHTML(slide.tag)}</span>` : ''}
+                <h1>${escapeHTML(slide.title || '')}</h1>
+                ${slide.subtitle ? `<p>${escapeHTML(slide.subtitle)}</p>` : ''}
+                <div class="announcement-btn-row">
+                    <a href="#menu" class="btn btn-primary-hero"><i class="fa-solid fa-utensils"></i> View Full Menu</a>
+                    <a href="#grab" class="btn btn-grab"><i class="fa-solid fa-motorcycle"></i> Order on Grab</a>
+                </div>
+            </div>
         </div>
       `;
 
@@ -246,6 +255,24 @@ async function initHeroBannerSlider() {
       setupTouchSwipe(slidesCount);
     }
   }
+}
+
+function renderDefaultHeroSlide(track) {
+  track.innerHTML = `
+    <div class="hero-slide active">
+        <div class="announcement-card-split">
+            <div class="announcement-img-col">
+                <img src="images/kgb.jpeg" alt="Korean Garlic Bun" onerror="this.src='images/Logo.jpg';">
+            </div>
+            <div class="announcement-text-col">
+                <span class="hero-tag" style="background-color: #004B00; color: white;">Welcome</span>
+                <h1>Experience Premium Artisanal Coffee & Korean Buns</h1>
+                <p>Crafted with passion in Caloocan. Taste the perfect brew everyday.</p>
+                <a href="#menu" class="btn btn-primary-hero"><i class="fa-solid fa-mug-hot"></i> Explore Menu</a>
+            </div>
+        </div>
+    </div>
+  `;
 }
 
 function renderDefaultHeroSlide(track) {
@@ -427,7 +454,17 @@ function renderMenuItems(items) {
     return;
   }
 
-  grid.innerHTML = items.map(item => {
+  // Sort: Priority items first (1, 2, 3, 4), then regular catalog order
+  const sortedItems = [...items].sort((a, b) => {
+    const rankA = a.priority_rank || 0;
+    const rankB = b.priority_rank || 0;
+    if (rankA > 0 && rankB > 0) return rankA - rankB;
+    if (rankA > 0) return -1;
+    if (rankB > 0) return 1;
+    return (a.display_order || 0) - (b.display_order || 0);
+  });
+
+  grid.innerHTML = sortedItems.map(item => {
     const isAvailable = item.is_available === 1 || item.is_available === true;
     const badgeHTML = getBadgeHTML(item.badge);
     const imagePath = item.image_url || item.image || 'images/Logo.jpg';
@@ -482,10 +519,12 @@ function initItemDetailModal() {
   const closeActionBtn = document.getElementById('modal-close-action-btn');
   const grabBtn = document.getElementById('modal-order-grab-btn');
 
+  // Safely attach listener if the top close button exists
   if (closeBtn) {
     closeBtn.addEventListener('click', closeItemDetailModal);
   }
 
+  // Sticky bottom close button
   if (closeActionBtn) {
     closeActionBtn.addEventListener('click', closeItemDetailModal);
   }

@@ -641,121 +641,131 @@
                 </div>
 
                 <!-- Sub-Section 1: Supplier Shipments (Stock In) -->
-                <div id="ledger-subtab-shipments" class="ledger-sub-pane active" style="display:block;">
-                    <div class="ledger-toolbar">
-                        <div class="date-range-container">
-                            <input type="date" id="invoice-date-filter" onchange="loadSupplierInvoices()">
-                            <input type="text" id="invoice-supplier-filter" placeholder="Search by supplier..." onkeyup="loadSupplierInvoices()">
-                        </div>
-                        <div class="filter-pill-group">
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('shipments')">
-                                <i class="fa-solid fa-file-csv"></i> Export CSV
-                            </button>
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
-                                <i class="fa-solid fa-print"></i> Print / PDF
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Invoice #</th>
-                                    <th>Supplier</th>
-                                    <th>Container Item</th>
-                                    <th>Quantities</th>
-                                    <th>Unit Cost</th>
-                                    <th>Verification Status</th>
-                                    <th>Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody id="invoices-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Sub-Section 2: Stock-Out & Spillage Logs -->
-                <div id="ledger-subtab-spillage" class="ledger-sub-pane" style="display:none;">
-                    <div class="ledger-toolbar">
-                        <div class="date-range-container">
-                            <label style="font-size:0.82rem; font-weight:700;">From:</label>
-                            <input type="date" id="spillage-start-date" onchange="loadWastageLogs()">
-                            <label style="font-size:0.82rem; font-weight:700;">To:</label>
-                            <input type="date" id="spillage-end-date" onchange="loadWastageLogs()">
-                            <label style="font-size:0.82rem; font-weight:700;">Type:</label>
-                            <div class="custom-pill-selector" style="display:inline-flex; vertical-align:middle;">
-    <button type="button" class="pill-btn active" onclick="filterSpillageTypePill('ALL', this)">All Adjustments</button>
-    <button type="button" class="pill-btn" onclick="filterSpillageTypePill('SPILLAGE', this)">Spillage / Wastage</button>
-    <button type="button" class="pill-btn" onclick="filterSpillageTypePill('AUDIT', this)">Stock-Out Audits</button>
+                <!-- Sub-Section 1: Supplier Shipments (Stock In) -->
+<div id="ledger-subtab-shipments" class="ledger-sub-pane active" style="display:block;">
+    <div class="ledger-toolbar">
+        <div class="date-range-container">
+            <label style="font-size:0.82rem; font-weight:700;">From:</label>
+            <input type="date" id="invoice-start-date" onchange="loadSupplierInvoices()">
+            <label style="font-size:0.82rem; font-weight:700;">To:</label>
+            <input type="date" id="invoice-end-date" onchange="loadSupplierInvoices()">
+            <input type="text" id="invoice-supplier-filter" placeholder="Search by supplier..." onkeyup="loadSupplierInvoices()" style="min-width: 180px;">
+            <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearShipmentFilters()">
+                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+            </button>
+        </div>
+        <div class="filter-pill-group">
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('shipments')">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                <i class="fa-solid fa-print"></i> Print / PDF
+            </button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Invoice #</th>
+                    <th>Supplier</th>
+                    <th>Container Item</th>
+                    <th>Quantities</th>
+                    <th>Unit Cost</th>
+                    <th>Verification Status</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="invoices-table-body"></tbody>
+        </table>
+    </div>
 </div>
-<input type="hidden" id="spillage-type-filter" value="ALL">
-                            <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearSpillageFilters()">
-                                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
-                            </button>
-                        </div>
-                        <div class="filter-pill-group">
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('spillage')">
-                                <i class="fa-solid fa-file-csv"></i> Export CSV
-                            </button>
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
-                                <i class="fa-solid fa-print"></i> Print / PDF
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="custom-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Type / Item</th>
-                                    <th>Quantity / Details</th>
-                                    <th>Reason Code</th>
-                                    <th>Unit Cost</th>
-                                    <th>Financial Loss</th>
-                                    <th>Logged By</th>
-                                    <th>Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody id="spillage-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
 
-                <!-- Sub-Section 3: Daily EOD Closeout History -->
-                <div id="ledger-subtab-closeouts" class="ledger-sub-pane" style="display:none;">
-                    <div class="ledger-toolbar">
-                        <div class="date-range-container">
-                            <label style="font-size:0.82rem; font-weight:700;">From:</label>
-                            <input type="date" id="closeout-start-date" onchange="loadCloseoutHistory()">
-                            <label style="font-size:0.82rem; font-weight:700;">To:</label>
-                            <input type="date" id="closeout-end-date" onchange="loadCloseoutHistory()">
-                        </div>
-                        <div class="filter-pill-group">
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('closeouts')">
-                                <i class="fa-solid fa-file-csv"></i> Export CSV
-                            </button>
-                            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
-                                <i class="fa-solid fa-print"></i> Print / PDF
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Closeout ID</th>
-                                    <th>Shift Date</th>
-                                    <th>Gross Sales</th>
-                                    <th>Discounts</th>
-                                    <th>Net Sales Amount</th>
-                                    <th>Logged By</th>
-                                    <th>Itemized Details</th>
-                                </tr>
-                            </thead>
-                            <tbody id="closeouts-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
+<!-- Sub-Section 2: Stock-Out & Spillage Logs -->
+<div id="ledger-subtab-spillage" class="ledger-sub-pane" style="display:none;">
+    <div class="ledger-toolbar">
+        <div class="date-range-container">
+            <label style="font-size:0.82rem; font-weight:700;">From:</label>
+            <input type="date" id="spillage-start-date" onchange="loadWastageLogs()">
+            <label style="font-size:0.82rem; font-weight:700;">To:</label>
+            <input type="date" id="spillage-end-date" onchange="loadWastageLogs()">
+            <label style="font-size:0.82rem; font-weight:700;">Type:</label>
+            <div class="custom-pill-selector" style="display:inline-flex; vertical-align:middle;">
+                <button type="button" class="pill-btn active" onclick="filterSpillageTypePill('ALL', this)">All Adjustments</button>
+                <button type="button" class="pill-btn" onclick="filterSpillageTypePill('SPILLAGE', this)">Spillage / Wastage</button>
+                <button type="button" class="pill-btn" onclick="filterSpillageTypePill('AUDIT', this)">Stock-Out Audits</button>
+            </div>
+            <input type="hidden" id="spillage-type-filter" value="ALL">
+            <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearSpillageFilters()">
+                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+            </button>
+        </div>
+        <div class="filter-pill-group">
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('spillage')">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                <i class="fa-solid fa-print"></i> Print / PDF
+            </button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Type / Item</th>
+                    <th>Quantity / Details</th>
+                    <th>Reason Code</th>
+                    <th>Unit Cost</th>
+                    <th>Financial Loss</th>
+                    <th>Logged By</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="spillage-table-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Sub-Section 3: Daily EOD Closeout History -->
+<div id="ledger-subtab-closeouts" class="ledger-sub-pane" style="display:none;">
+    <div class="ledger-toolbar">
+        <div class="date-range-container">
+            <label style="font-size:0.82rem; font-weight:700;">From:</label>
+            <input type="date" id="closeout-start-date" onchange="loadCloseoutHistory()">
+            <label style="font-size:0.82rem; font-weight:700;">To:</label>
+            <input type="date" id="closeout-end-date" onchange="loadCloseoutHistory()">
+            <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearCloseoutFilters()">
+                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+            </button>
+        </div>
+        <div class="filter-pill-group">
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem;" onclick="exportLedgerCSV('closeouts')">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+            <button class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--bronze-accent);" onclick="printLedgerSection()">
+                <i class="fa-solid fa-print"></i> Print / PDF
+            </button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Closeout ID</th>
+                    <th>Shift Date</th>
+                    <th>Gross Sales</th>
+                    <th>Discounts</th>
+                    <th>Net Sales Amount</th>
+                    <th>Logged By</th>
+                    <th>Itemized Details</th>
+                </tr>
+            </thead>
+            <tbody id="closeouts-table-body"></tbody>
+        </table>
+    </div>
+</div>
 
             </div>
         </section>
@@ -851,6 +861,7 @@
                                 <th>Name</th>
                                 <th>Category</th>
                                 <th>Price</th>
+                                <th>Priority Rank</th>
                                 <th>Status</th>
                                 <th>Views</th>
                                 <th>Actions</th>
