@@ -419,6 +419,34 @@ function initDatabaseSchema() {
             session_id TEXT
         )`);
 
+        // SMART INVENTORY TRACKER: recipe links (menu item -> bulk container usage per serving)
+        db.run(`CREATE TABLE IF NOT EXISTS recipe_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            menu_item_id INTEGER NOT NULL,
+            inventory_item_id INTEGER NOT NULL,
+            usage_amount REAL NOT NULL,
+            usage_unit TEXT DEFAULT 'g',
+            container_quantity REAL NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(menu_item_id, inventory_item_id)
+        )`);
+
+        // SMART INVENTORY TRACKER: computed end-of-day usage deductions
+        db.run(`CREATE TABLE IF NOT EXISTS usage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_item_id INTEGER NOT NULL,
+            menu_items_summary TEXT,
+            items_sold INTEGER NOT NULL,
+            total_used REAL NOT NULL,
+            whole_containers INTEGER NOT NULL DEFAULT 0,
+            remainder REAL NOT NULL DEFAULT 0,
+            opened_before REAL DEFAULT 0,
+            usage_unit TEXT DEFAULT 'g',
+            calculation_date TEXT,
+            logged_by TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
         // Automatic DB Migrations for Existing Databases
         db.all(`PRAGMA table_info(menu_items)`, [], (err, columns) => {
     if (!err && columns && columns.length > 0) {
@@ -1605,6 +1633,339 @@ app.post('/api/admin/settings', requireAuth, (req, res) => {
 
         logAudit('STORE_SETTINGS_UPDATED', `Updated store hours: Open ${open_time}, Close ${close_time}, Override: ${store_status}`, performer);
         res.json({ success: true });
+    });
+});
+
+/* ===========================================================================
+   11.5 SMART INVENTORY TRACKER (Ultra Smart Inventory — additive only)
+   Keeps everything additive: existing tables & endpoints are untouched.
+   =========================================================================== */
+
+// Bulk container cards: each container + every menu item consuming it + remainders
+app.get('/api/admin/inventory/container-cards', requireAuth, (req, res) => {
+    db.all(`
+        SELECT i.id, i.item_name, i.container_unit, i.stock_quantity, i.safety_threshold, i.item_cost,
+               r.id as recipe_id, r.menu_item_id, r.usage_amount, r.usage_unit, r.container_quantity,
+               m.name as menu_item_name
+        FROM inventory_items i
+        LEFT JOIN recipe_links r ON r.inventory_item_id = i.id
+        LEFT JOIN menu_items m ON m.id = r.menu_item_id
+        ORDER BY i.item_name ASC, m.name ASC
+    `, [], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+
+        // last persisted remainder (grams/ml sitting in the currently opened container)
+        db.all(`
+            SELECT u.inventory_item_id, u.remainder, u.usage_unit
+            FROM usage_logs u
+            INNER JOIN (
+                SELECT inventory_item_id, MAX(id) AS last_id
+                FROM usage_logs
+                GROUP BY inventory_item_id
+            ) last ON last.last_id = u.id
+        `, [], (err2, remainders) => {
+            if (err2) return res.status(500).json({ success: false, error: err2.message });
+            const lastRemainder = {};
+            remainders.forEach(r => { lastRemainder[r.inventory_item_id] = r; });
+
+            const cards = [];
+            const byId = {};
+            rows.forEach(row => {
+                if (!byId[row.id]) {
+                    const shownRemainder = lastRemainder[row.id] || null;
+                    byId[row.id] = {
+                        inventory_item_id: row.id,
+                        item_name: row.item_name,
+                        container_unit: row.container_unit,
+                        stock_quantity: row.stock_quantity,
+                        safety_threshold: row.safety_threshold,
+                        item_cost: row.item_cost,
+                        open_container_remaining: shownRemainder ? shownRemainder.remainder : null,
+                        open_container_unit: shownRemainder ? shownRemainder.usage_unit : row.container_unit,
+                        menu_items: []
+                    };
+                    cards.push(byId[row.id]);
+                }
+                if (row.recipe_id) {
+                    byId[row.id].menu_items.push({
+                        recipe_id: row.recipe_id,
+                        menu_item_id: row.menu_item_id,
+                        menu_item_name: row.menu_item_name,
+                        usage_per_serving: row.usage_amount,
+                        usage_unit: row.usage_unit,
+                        container_quantity: row.container_quantity
+                    });
+                }
+            });
+            res.json(cards);
+        });
+    });
+});
+
+// Recipe links for one menu item (what bulk containers it consumes)
+app.get('/api/admin/recipes/:menuItemId', requireAuth, (req, res) => {
+    const menuId = parseInt(req.params.menuItemId, 10);
+    db.all(`
+        SELECT r.*, i.item_name, i.container_unit
+        FROM recipe_links r
+        LEFT JOIN inventory_items i ON r.inventory_item_id = i.id
+        WHERE r.menu_item_id = ?
+        ORDER BY r.id ASC
+    `, [menuId], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json(rows);
+    });
+});
+
+// All menu items (for the EOD sold-entry dropdowns)
+app.get('/api/admin/menu', requireAuth, (req, res) => {
+    db.all(`SELECT id, name, category, price, is_available, display_order FROM menu_items ORDER BY display_order ASC, id ASC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json(rows);
+    });
+});
+
+// Create or update a recipe link (menu item -> container, usage per serving)
+app.post('/api/admin/recipes', requireAuth, (req, res) => {
+    const { menu_item_id, inventory_item_id, usage_amount, usage_unit, container_quantity } = req.body;
+    const performer = getActiveUser(req);
+
+    const menuId = parseInt(menu_item_id, 10);
+    const invId = parseInt(inventory_item_id, 10);
+    const perServing = parseFloat(usage_amount);
+    const containerQty = parseFloat(container_quantity);
+
+    if (!menuId || !invId || !(perServing > 0) || !(containerQty > 0)) {
+        return res.status(400).json({ success: false, error: 'menu_item_id, inventory_item_id, usage_amount and container_quantity (all > 0) are required.' });
+    }
+    const unit = (usage_unit === 'ml') ? 'ml' : 'g';
+
+    db.run(`
+        INSERT INTO recipe_links (menu_item_id, inventory_item_id, usage_amount, usage_unit, container_quantity)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(menu_item_id, inventory_item_id) DO UPDATE SET
+            usage_amount = excluded.usage_amount,
+            usage_unit = excluded.usage_unit,
+            container_quantity = excluded.container_quantity
+    `, [menuId, invId, perServing, unit, containerQty], function(err) {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        logAudit('SMART_RECIPE_LINK', `Linked menu item [ID: ${menuId}] to bulk container [ID: ${invId}] — ${perServing}${unit} per serving, ${containerQty}${unit} per container.`, performer);
+        res.json({ success: true });
+    });
+});
+
+// Remove a recipe link
+app.delete('/api/admin/recipes/:id', requireAuth, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const performer = getActiveUser(req);
+    db.run(`DELETE FROM recipe_links WHERE id = ?`, [id], function(err) {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (this.changes === 0) return res.status(404).json({ success: false, error: 'Recipe link not found.' });
+        logAudit('SMART_RECIPE_UNLINK', `Removed recipe link [ID: ${id}].`, performer);
+        res.json({ success: true });
+    });
+});
+
+// End-of-day calculation engine: items sold -> containers used + remainder
+// Body: { shift_date, items: [{menu_item_id, quantity_sold}], preview }
+app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
+    const { shift_date } = req.body;
+    const isPreview = req.body.preview === true || req.body.preview === 'true';
+    const performer = getActiveUser(req);
+    const soldItems = Array.isArray(req.body.items) ? req.body.items : [];
+
+    if (!soldItems.length) {
+        return res.status(400).json({ success: false, error: 'items_sold list is required.' });
+    }
+
+    const soldMap = {};
+    soldItems.forEach(i => {
+        const id = parseInt(i.menu_item_id, 10);
+        const qty = parseInt(i.quantity_sold, 10) || 0;
+        if (id) soldMap[id] = (soldMap[id] || 0) + qty;
+    });
+    const menuIds = Object.keys(soldMap).map(Number);
+    if (!menuIds.length) {
+        return res.status(400).json({ success: false, error: 'No valid menu_item_id provided.' });
+    }
+
+    const placeholders = menuIds.map(() => '?').join(',');
+    db.all(`
+        SELECT r.menu_item_id, r.inventory_item_id, r.usage_amount, r.usage_unit, r.container_quantity,
+               i.item_name, i.stock_quantity, m.name as menu_item_name
+        FROM recipe_links r
+        JOIN inventory_items i ON i.id = r.inventory_item_id
+        LEFT JOIN menu_items m ON m.id = r.menu_item_id
+        WHERE r.menu_item_id IN (${placeholders})
+        ORDER BY r.inventory_item_id ASC
+    `, menuIds, (err, links) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+
+        // Warn for sold items with no recipe links (they are NOT deducted on confirm)
+        const warnings = [];
+        menuIds.forEach(mid => {
+            if (!links.some(l => l.menu_item_id === mid)) {
+                warnings.push({
+                    menu_item_id: mid,
+                    items_sold: soldMap[mid],
+                    warning: 'NO_RECIPE_LINK',
+                    message: 'This menu item has no Smart Inventory recipe link yet — it will NOT be deducted.'
+                });
+            }
+        });
+
+        // Last persisted remainder per container = grams/ml sitting in the currently opened container
+        db.all(`
+            SELECT u.inventory_item_id, u.remainder, u.usage_unit
+            FROM usage_logs u
+            INNER JOIN (
+                SELECT inventory_item_id, MAX(id) AS last_id FROM usage_logs GROUP BY inventory_item_id
+            ) last ON last.last_id = u.id
+        `, [], (err2, remainderRows) => {
+            if (err2) return res.status(500).json({ success: false, error: err2.message });
+            const lastRemainder = {};
+            remainderRows.forEach(r => { lastRemainder[r.inventory_item_id] = r; });
+
+            const ledger = {};
+            links.forEach(link => {
+                const sold = soldMap[link.menu_item_id];
+                if (!sold || sold <= 0) return;
+
+                if (!ledger[link.inventory_item_id]) {
+                    const prev = lastRemainder[link.inventory_item_id];
+                    ledger[link.inventory_item_id] = {
+                        inventory_item_id: link.inventory_item_id,
+                        item_name: link.item_name,
+                        container_unit: link.usage_unit,
+                        stock_before: link.stock_quantity,
+                        whole_containers: 0,
+                        opened_before: 0,
+                        remainder: prev ? prev.remainder : 0,
+                        total_used: 0,
+                        items_sold_total: 0,
+                        serves_menu_items: [],
+                        usage_unit: link.usage_unit
+                    };
+                }
+                const c = ledger[link.inventory_item_id];
+
+                const perServing = parseFloat(link.usage_amount);
+                const containerQty = parseFloat(link.container_quantity);
+                const usedThisLink = sold * perServing;
+                const openedBefore = c.remainder;
+
+                const combined = openedBefore + usedThisLink;
+                let wholeUsed = containerQty > 0 ? Math.floor(combined / containerQty) : 0;
+                let newRemainder = containerQty > 0 ? combined - wholeUsed * containerQty : combined;
+
+                if (wholeUsed > Math.floor(c.stock_before)) {
+                    c.warning = c.warning || 'STOCK_OVERFLOW';
+                    c.message = c.message || `Usage exceeds stock: needs ${wholeUsed} whole container(s) of ${link.item_name}, only ${Math.floor(c.stock_before)} in stock. Stock will not go below zero.`;
+                    wholeUsed = Math.max(0, Math.floor(c.stock_before));
+                } else if (wholeUsed + Math.floor(c.stock_before) > 0 && c.stock_before < 0.5 && usedThisLink > 0) {
+                    // stock empty but remainder in ledger still available — handled by remainder carry-over
+                }
+
+                c.whole_containers += wholeUsed;
+                c.stock_after = c.stock_before - c.whole_containers;
+                c.remainder = newRemainder;
+                c.opened_before = openedBefore;
+                c.total_used += usedThisLink;
+                c.items_sold_total += sold;
+                c.usage_unit = link.usage_unit;
+                c.container_quantity = containerQty;
+                c.serves_menu_items.push(`${link.menu_item_name || ('Menu #' + link.menu_item_id)} x${sold}`);
+            });
+
+            const containerResults = Object.values(ledger).map(c => ({
+                inventory_item_id: c.inventory_item_id,
+                item_name: c.item_name,
+                menu_items_summary: c.serves_menu_items.join(', '),
+                usage_unit: c.usage_unit,
+                items_sold: c.items_sold_total,
+                total_used: Math.round(c.total_used * 100) / 100,
+                container_quantity: c.container_quantity,
+                whole_containers: c.whole_containers,
+                opened_before: Math.round(c.opened_before * 100) / 100,
+                remainder: Math.round(c.remainder * 100) / 100,
+                remaining_text: c.container_quantity > 0
+                    ? `${c.whole_containers} whole container(s) used — ${Math.round(c.remainder * 100) / 100}${c.usage_unit} of the opened container left`
+                    : `${Math.round(c.remainder * 100) / 100}${c.usage_unit} left`,
+                stock_before: c.stock_before,
+                stock_after: c.stock_after,
+                warning: c.warning || null,
+                message: c.message || null
+            }));
+
+            if (isPreview) {
+                return res.json({ success: true, preview: true, shift_date: shift_date || null, containers: containerResults, warnings });
+            }
+
+            // COMMIT — transaction so math can never be half-applied
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+                let commitError = null;
+                let doneCount = 0;
+                const totalSteps = containerResults.reduce((n, c) => n + (c.whole_containers > 0 ? 2 : 1), 0);
+                if (totalSteps === 0) {
+                    db.run('ROLLBACK');
+                    return res.json({ success: true, applied: true, containers: containerResults, warnings, note: 'Nothing to deduct.' });
+                }
+
+                containerResults.forEach(c => {
+                    if (c.whole_containers > 0) {
+                        db.run(
+                            `UPDATE inventory_items SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                            [c.whole_containers, c.inventory_item_id],
+                            (err) => {
+                                if (err && !commitError) commitError = err.message;
+                                if (!err && c.stock_after <= 0) {
+                                    db.run(`UPDATE menu_items SET is_available = 0 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [c.inventory_item_id], () => {
+                                        touchMenuUpdateTimestamp();
+                                        logAudit('MENU_KILL_SWITCH', `Smart Inventory: bulk container [ID: ${c.inventory_item_id}] reached zero — linked menu items auto-disabled.`, 'Smart Tracker');
+                                    });
+                                }
+                            }
+                        );
+                    }
+                    db.run(`
+                        INSERT INTO usage_logs
+                            (inventory_item_id, menu_items_summary, items_sold, total_used, whole_containers, remainder, opened_before, usage_unit, calculation_date, logged_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `, [
+                        c.inventory_item_id,
+                        c.menu_items_summary,
+                        c.items_sold,
+                        c.total_used,
+                        c.whole_containers,
+                        c.remainder,
+                        c.opened_before,
+                        c.usage_unit,
+                        shift_date || new Date().toISOString().slice(0, 10),
+                        performer
+                    ], (err) => {
+                        if (err && !commitError) commitError = err.message;
+                        doneCount += 1;
+                    });
+                });
+
+                // wait for all writes before committing the transaction
+                const waiter = setInterval(() => {
+                    if (doneCount >= containerResults.length) {
+                        clearInterval(waiter);
+                        if (commitError) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ success: false, error: commitError });
+                        }
+                        db.run('COMMIT', (err) => {
+                            if (err) return res.status(500).json({ success: false, error: err.message });
+                            logAudit('SMART_SHIFT_USAGE', `Smart Inventory EOD calculation applied for ${shift_date || 'today'}: ${containerResults.length} containers, ${soldItems.length} menu lines.`, performer);
+                            res.json({ success: true, applied: true, containers: containerResults, warnings });
+                        });
+                    }
+                }, 25);
+            });
+        });
     });
 });
 

@@ -230,6 +230,7 @@ function switchTab(tabName, element) {
         'dashboard': 'Operational Dashboard',
         'cashier': 'Cashier Promo Code Verification',
         'inventory': 'Inventory & Supply Command Center',
+        'smart': 'Ultra Smart Inventory Tracker',
         'invoices': 'Operational Ledgers & Shipment History',
         'menu': 'Menu Catalog Management',
         'banners': 'Hero Banners & Visuals',
@@ -2407,4 +2408,264 @@ function reorderItem(id, direction, type = 'menu') {
             showToast(res.error || 'Failed to reorder.', 'error');
         }
     });
+}
+/* ===========================================================================
+   ULTRA SMART INVENTORY TRACKER (additive section)
+   =========================================================================== */
+function switchSmartSubTab(subName, btn) {
+    document.querySelectorAll('#tab-smart .smart-sub-pane').forEach(p => {
+        p.style.display = 'none';
+    });
+    document.querySelectorAll('#tab-smart .sub-tab-btn').forEach(b => b.classList.remove('active'));
+    const pane = document.getElementById(`smart-subtab-${subName}`);
+    if (pane) pane.style.display = 'block';
+    if (btn) btn.classList.add('active');
+    if (subName === 'recipes') loadSmartContainerCards();
+    if (subName === 'eod') loadSmartEODForm();
+    document.getElementById('smart-confirm-btn').style.display = 'none';
+}
+
+function loadSmartContainerCards() {
+    Promise.all([
+        fetch('/api/admin/inventory/container-cards').then(r => r.json()),
+        fetch('/api/admin/menu').then(r => r.json()),
+        fetch('/api/admin/inventory').then(r => r.json())
+    ])
+    .then(([cards, menuItems, inventoryItems]) => {
+        // cache for the link modal
+        window._smartMenuCache = menuItems || [];
+        window._smartInventoryCache = inventoryItems || [];
+        window._smartLastRemainder = {};
+        (cards || []).forEach(c => { window._smartLastRemainder[c.inventory_item_id] = c.open_container_remaining || 0; });
+
+        const wrap = document.getElementById('smart-container-cards');
+        if (!wrap) return;
+        if (!cards || !cards.length) {
+            wrap.innerHTML = '<div style="padding:20px;color:#666;">No bulk containers registered yet.</div>';
+            return;
+        }
+        wrap.innerHTML = cards.map(card => {
+            const menuRows = card.menu_items.length
+                ? card.menu_items.map(mi => `
+                    <div class="smart-menu-row">
+                        <div>
+                            <strong>${escapeHtml(mi.menu_item_name || 'Menu #' + mi.menu_item_id)}</strong><br>
+                            <span style="font-size:0.8rem;color:#555;">${mi.usage_per_serving} ${mi.usage_unit} per serving &middot; container holds ${mi.container_quantity} ${mi.usage_unit}</span>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <button class="btn-action smart-small-btn" onclick="editSmartRecipe(${mi.recipe_id}, ${JSON.stringify(mi).replace(/"/g,'&quot;')})"><i class="fa-solid fa-pen"></i> Edit</button>
+                            <button class="btn-action smart-small-btn" style="background-color: #a02020;" onclick="deleteSmartRecipe(${mi.recipe_id})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>`).join('')
+                : '<div style="padding:10px;color:#777;font-size:0.85rem;">No menu items linked to this container yet.</div>';
+
+            const opened = card.open_container_remaining;
+            const openedText = (opened !== null && opened !== undefined)
+                ? `<span style="font-size:0.82rem;color:#555;"><i class="fa-solid fa-scale-balanced"></i> Open container has <strong>${opened} ${card.open_container_unit}</strong> remaining</span>`
+                : `<span style="font-size:0.82rem;color:#888;"><i class="fa-solid fa-circle-info"></i> No shift usage computed yet — a full container is assumed open on first use</span>`;
+
+            const low = card.stock_quantity <= card.safety_threshold;
+            return `
+                <div class="smart-container-card ${low ? 'smart-card-low' : ''}">
+                    <div class="smart-card-header">
+                        <div>
+                            <h3><i class="fa-solid fa-box"></i> ${escapeHtml(card.item_name)}</h3>
+                            <span style="font-size:0.85rem;color:#666;">Unit: ${escapeHtml(card.container_unit)} &middot; Threshold: ${card.safety_threshold}</span>
+                        </div>
+                        <div class="smart-stock-pill ${low ? 'low' : ''}">
+                            ${card.stock_quantity} whole container(s)
+                        </div>
+                    </div>
+                    <div style="margin: 10px 0;">${openedText}</div>
+                    ${menuRows}
+                </div>`;
+        }).join('');
+    })
+    .catch(err => showToast('Failed to load Smart Inventory cards: ' + err.message, 'error'));
+}
+
+function openSmartLinkModal() {
+    const menuSel = document.getElementById('smart-link-menu');
+    const invSel = document.getElementById('smart-link-inventory');
+    menuSel.innerHTML = (window._smartMenuCache || []).map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+    invSel.innerHTML = (window._smartInventoryCache || []).map(i => `<option value="${i.id}">${escapeHtml(i.item_name)} (${escapeHtml(i.container_unit)})</option>`).join('');
+    ['smart-link-usage', 'smart-link-container-qty'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('smart-link-modal').style.display = 'flex';
+}
+
+function closeSmartLinkModal() {
+    document.getElementById('smart-link-modal').style.display = 'none';
+}
+
+function editSmartRecipe(recipeId, data) {
+    openSmartLinkModal();
+    document.getElementById('smart-link-menu').value = data.menu_item_id;
+    const invSel = document.getElementById('smart-link-inventory');
+    const exists = [...invSel.options].some(o => parseInt(o.value, 10) === parseInt(data.inventory_item_id, 10));
+    invSel.value = exists ? data.inventory_item_id : invSel.options[0].value;
+    document.getElementById('smart-link-usage').value = data.usage_per_serving;
+    document.getElementById('smart-link-unit').value = data.usage_unit;
+    document.getElementById('smart-link-container-qty').value = data.container_quantity;
+    // remember recipe id so submit deletes the old link if the container choice changed, then upserts
+    document.getElementById('smart-link-usage').dataset.recipeId = recipeId;
+    document.getElementById('smart-link-usage').dataset.oldInventoryId = data.inventory_item_id;
+    document.getElementById('smart-link-usage').dataset.oldMenuId = data.menu_item_id;
+}
+
+function deleteSmartRecipe(recipeId) {
+    if (!confirm('Remove this menu item \u2192 container recipe link?')) return;
+    fetch(`/api/admin/recipes/${recipeId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) { showToast('Recipe link removed.'); loadSmartContainerCards(); }
+            else showToast(res.error || 'Failed to remove recipe link.', 'error');
+        });
+}
+
+function submitSmartLink() {
+    const usageEl = document.getElementById('smart-link-usage');
+    const payload = {
+        menu_item_id: document.getElementById('smart-link-menu').value,
+        inventory_item_id: document.getElementById('smart-link-inventory').value,
+        usage_amount: parseFloat(usageEl.value),
+        usage_unit: document.getElementById('smart-link-unit').value,
+        container_quantity: parseFloat(document.getElementById('smart-link-container-qty').value)
+    };
+    const isUpdate = usageEl.dataset.recipeId;
+    const oldMenuId = usageEl.dataset.oldMenuId;
+    const oldInvId = usageEl.dataset.oldInventoryId;
+    const changedContainer = isUpdate && parseInt(oldInvId, 10) !== payload.inventory_item_id;
+
+    const finishSave = () => {
+        fetch('/api/admin/recipes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('Recipe link saved!');
+                closeSmartLinkModal();
+                loadSmartContainerCards();
+            } else {
+                showToast(res.error || 'Failed to save recipe link.', 'error');
+            }
+        });
+    };
+
+    if (changedContainer) {
+        // upsert key is (menu_item_id, inventory_item_id): remove the old link before saving the new one
+        fetch(`/api/admin/recipes/${isUpdate}`, { method: 'DELETE' })
+            .then(finishSave);
+    } else {
+        finishSave();
+    }
+}
+
+function loadSmartEODForm() {
+    fetch('/api/admin/menu')
+        .then(r => r.json())
+        .then(menuItems => {
+            const grid = document.getElementById('smart-eod-menu-items-grid');
+            if (!grid) return;
+            window._smartMenuCache = menuItems || [];
+            grid.innerHTML = (menuItems || []).map(item => `
+                <div class="eod-item-card">
+                    <div class="eod-item-header">
+                        <span>${escapeHtml(item.name)}</span>
+                        <span class="eod-item-price">₱${parseFloat(item.price).toFixed(2)}</span>
+                    </div>
+                    <div class="eod-item-input-wrapper">
+                        <label>Units Sold:</label>
+                        <input type="number" min="0" value="0" class="eod-item-qty smart-eod-qty" data-menu-id="${item.id}" placeholder="e.g., 10" oninput="smartClearPreview()">
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function smartCollectSoldItems() {
+    const soldItems = [];
+    document.querySelectorAll('#smart-eod-menu-items-grid .smart-eod-qty').forEach(input => {
+        const menuId = parseInt(input.dataset.menuId, 10);
+        const qty = parseInt(input.value, 10) || 0;
+        if (menuId && qty > 0) soldItems.push({ menu_item_id: menuId, quantity_sold: qty });
+    });
+    return soldItems;
+}
+
+function smartClearPreview() {
+    document.getElementById('smart-confirm-btn').style.display = 'none';
+    window._smartLastPreview = null;
+}
+
+function renderSmartPreview(data) {
+    const el = document.getElementById('smart-preview-results');
+    let html = '';
+    const warns = (data.warnings || []).concat((data.containers || []).filter(c => c.warning).map(c => ({ message: c.message, warning: c.warning })));
+    if (warns.length) {
+        html += warns.map(w => `<div class="smart-warn-box"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(w.message || w.warning || 'Warning')}</div>`).join('');
+    }
+    if (!data.containers || !data.containers.length) {
+        html += '<div style="padding:10px;color:#777;">No linked containers found for the menu items entered.</div>';
+    } else {
+        html += data.containers.map(c => `
+            <div class="smart-result-card">
+                <div class="smart-card-header">
+                    <strong><i class="fa-solid fa-box"></i> ${escapeHtml(c.item_name)}</strong>
+                    <span>${c.menu_items_summary ? escapeHtml(c.menu_items_summary) : ''}</span>
+                </div>
+                <div class="smart-result-grid">
+                    <div>Sold this shift: <strong>${c.items_sold}</strong></div>
+                    <div>Total used: <strong>${c.total_used} ${c.usage_unit}</strong></div>
+                    <div>Opened with: <strong>${c.opened_before} ${c.usage_unit}</strong></div>
+                    <div>Whole containers used: <strong>${c.whole_containers}</strong></div>
+                    <div>Left in opened container: <strong>${c.remainder} ${c.usage_unit}</strong></div>
+                    ${data.preview ? '' : `<div>Stock before \u2192 after: <strong>${c.stock_before} \u2192 ${c.stock_after}</strong></div>`}
+                </div>
+                <div style="font-size:0.85rem;color:#555;margin-top:8px;"><i class="fa-solid fa-scale-balanced"></i> ${escapeHtml(c.remaining_text || '')}</div>
+            </div>
+        `).join('');
+    }
+    el.innerHTML = html;
+    document.getElementById('smart-confirm-btn').style.display = 'block';
+}
+
+function previewSmartShift() {
+    const soldItems = smartCollectSoldItems();
+    if (!soldItems.length) { showToast('Enter at least one item sold first.', 'error'); return; }
+    fetch('/api/admin/inventory/calc-shift-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview: true, shift_date: new Date().toISOString().slice(0, 10), items: soldItems })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) { showToast(data.error || 'Preview failed.', 'error'); return; }
+        window._smartLastPreview = data;
+        renderSmartPreview(data);
+    })
+    .catch(err => showToast('Preview failed: ' + err.message, 'error'));
+}
+
+function applySmartShift() {
+    if (!window._smartLastPreview) { showToast('Run the Calculate Preview first.', 'error'); return; }
+    if (!confirm('Confirm deducting the previewed usage from bulk container stock?')) return;
+    const soldItems = smartCollectSoldItems();
+    fetch('/api/admin/inventory/calc-shift-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview: false, shift_date: new Date().toISOString().slice(0, 10), items: soldItems })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) { showToast(data.error || 'Failed to apply.', 'error'); return; }
+        showToast('Smart shift usage applied!');
+        window._smartLastPreview = null;
+        document.getElementById('smart-confirm-btn').style.display = 'none';
+        renderSmartPreview(data);
+        loadSmartContainerCards();
+    })
+    .catch(err => showToast('Apply failed: ' + err.message, 'error'));
 }

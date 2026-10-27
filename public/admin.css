@@ -1807,3 +1807,100 @@ select:focus,
     }
 }
 
+
+/* ===========================================================================
+   ULTRA SMART INVENTORY TRACKER (additive)
+   =========================================================================== */
+.smart-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
+}
+
+.smart-container-card {
+    background: #fff;
+    border: 1px solid #e4e0d8;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.smart-container-card.smart-card-low {
+    border-color: #d33;
+    box-shadow: 0 0 0 2px rgba(220,50,50,0.12);
+}
+
+.smart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.smart-card-header h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.05rem;
+}
+
+.smart-stock-pill {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(26,127,55,0.12);
+    color: #1a7f37;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.smart-stock-pill.low {
+    background: rgba(220,50,50,0.12);
+    color: #c22;
+}
+
+.smart-menu-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px dashed #e8e4dc;
+}
+
+.smart-menu-row:last-child { border-bottom: 1px dashed #e8e4dc; }
+
+.smart-small-btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+}
+
+.smart-result-card {
+    background: #fff;
+    border: 1px solid #e4e0d8;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+}
+
+.smart-result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 20px;
+    margin-top: 10px;
+    font-size: 0.92rem;
+    color: #333;
+}
+
+.smart-warn-box {
+    background: rgba(220,150,20,0.1);
+    border: 1px solid rgba(220,150,20,0.4);
+    border-radius: 10px;
+    color: #8a5a00;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-size: 0.88rem;
+}
+
+@media (max-width: 768px) {
+    .smart-cards-grid { grid-template-columns: 1fr; }
+}
