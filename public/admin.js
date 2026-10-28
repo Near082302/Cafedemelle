@@ -230,7 +230,6 @@ function switchTab(tabName, element) {
         'dashboard': 'Operational Dashboard',
         'cashier': 'Cashier Promo Code Verification',
         'inventory': 'Inventory & Supply Command Center',
-        'smart': 'Ultra Smart Inventory Tracker',
         'invoices': 'Operational Ledgers & Shipment History',
         'menu': 'Menu Catalog Management',
         'banners': 'Hero Banners & Visuals',
@@ -265,6 +264,9 @@ function switchInventorySubTab(subName, btn) {
         pane.style.display = 'block'; // Force render
     }
     if (btn) btn.classList.add('active');
+
+    // PART 2: Smart Recipe Links live inside the unified Inventory tab now
+    if (subName === 'recipes') loadSmartContainerCards();
 }
 
 function switchLedgerSubTab(subName, btn) {
@@ -660,9 +662,14 @@ function renderInventoryTable(items) {
             ? '<span class="badge-audit-red"><i class="fa-solid fa-triangle-exclamation"></i> LOW STOCK (' + item.stock_quantity + ')</span>' 
             : '<span class="badge-audit-green"><i class="fa-solid fa-check"></i> STABLE (' + item.stock_quantity + ')</span>';
 
-        const linkedMenuDisplay = item.linked_menu_name 
-            ? '<span class="code-badge" style="background:var(--secondary); font-size:0.75rem;">' + escapeHtml(item.linked_menu_name) + '</span>' 
-            : '<span style="color:#888; font-style:italic;">Unlinked</span>';
+        // PART 2 Many-to-Many: show a badge group of ALL linked menu items (or an action hint to link them)
+        let linkedMenuDisplay;
+        const linkedList = Array.isArray(item.linked_menu_list) ? item.linked_menu_list : [];
+        if (linkedList.length) {
+            linkedMenuDisplay = linkedList.map(n => '<span class="code-badge" style="background:var(--secondary); font-size:0.75rem; margin:2px 2px 2px 0;">' + escapeHtml(n) + '</span>').join('');
+        } else {
+            linkedMenuDisplay = '<span style="color:#888; font-style:italic;">Unlinked</span>';
+        }
 
         let actionsHtml = '';
         if (isAdminOrAbove) {
@@ -679,7 +686,7 @@ function renderInventoryTable(items) {
             '<td data-label="Unit Type">' + escapeHtml(item.container_unit) + '</td>' +
             '<td data-label="In Stock">' + item.stock_quantity + '</td>' +
             '<td data-label="Safety Threshold">' + item.safety_threshold + '</td>' +
-            '<td data-label="Linked Menu Item">' + linkedMenuDisplay + '</td>' +
+            '<td data-label="Linked Menu Items">' + linkedMenuDisplay + '</td>' +
             '<td data-label="Unit Cost">₱' + (item.item_cost || 0).toFixed(2) + '</td>' +
             '<td data-label="Status">' + statusBadge + '</td>' +
             '<td data-label="Actions">' + actionsHtml + '</td>' +
@@ -753,8 +760,11 @@ function renderEodMenuGrid(items) {
         return;
     }
 
-    if (!items || items.length === 0) {
-        grid.innerHTML = '<div style="color:#888; grid-column: 1/-1; padding: 15px; text-align: center;">No menu items available to log.</div>';
+    // PART 2: only ACTIVE (sellable) menu items belong in the sold-today grid
+    const activeItems = (items || []).filter(item => item.is_available !== 0);
+
+    if (!activeItems || activeItems.length === 0) {
+        grid.innerHTML = '<div style="color:#888; grid-column: 1/-1; padding: 15px; text-align: center;">No active menu items available to log.</div>';
         return;
     }
 
@@ -767,7 +777,7 @@ function renderEodMenuGrid(items) {
         }
     });
 
-    grid.innerHTML = items.map(item => {
+    grid.innerHTML = activeItems.map(item => {
         const preservedQty = existingValues[item.id] !== undefined ? existingValues[item.id] : 0;
         return `
             <div class="eod-item-card" data-name="${item.name.toLowerCase()}" data-category="${item.category}" data-price="${item.price}">
@@ -776,8 +786,12 @@ function renderEodMenuGrid(items) {
                     <span class="eod-item-price">₱${parseFloat(item.price).toFixed(2)}</span>
                 </div>
                 <div class="eod-item-input-wrapper">
-                    <label>Units Sold:</label>
-                    <input type="number" min="0" value="${preservedQty}" class="eod-item-qty" data-menu-id="${item.id}" data-category="${item.category}" data-price="${item.price}" placeholder="e.g., 10" oninput="updateEodLiveTally()">
+                    <label>Units Sold Today:</label>
+                    <div class="eod-stepper" data-menu-id="${item.id}">
+                        <button type="button" class="eod-stepper-btn" aria-label="decrement" onclick="stepEodQty(${item.id}, -1)"><i class="fa-solid fa-minus"></i></button>
+                        <input type="number" min="0" value="${preservedQty}" class="eod-item-qty" id="eod-qty-${item.id}" data-menu-id="${item.id}" data-category="${item.category}" data-price="${item.price}" placeholder="0" oninput="onEodQtyChanged()">
+                        <button type="button" class="eod-stepper-btn" aria-label="increment" onclick="stepEodQty(${item.id}, 1)"><i class="fa-solid fa-plus"></i></button>
+                    </div>
                 </div>
             </div>
         `;
@@ -786,6 +800,21 @@ function renderEodMenuGrid(items) {
     // Re-apply any active search or category filters
     filterEodMenuGrid();
     updateEodLiveTally();
+}
+
+// Numeric stepper for "Units Sold Today" entries
+function stepEodQty(menuId, delta) {
+    const input = document.getElementById(`eod-qty-${menuId}`);
+    if (!input) return;
+    const current = parseInt(input.value, 10) || 0;
+    const next = Math.max(0, current + delta);
+    input.value = next;
+    onEodQtyChanged();
+}
+
+function onEodQtyChanged() {
+    updateEodLiveTally();
+    smartClearPreview();
 }
 
 function filterEodByCategory(category, btn) {
@@ -872,61 +901,69 @@ function updateEodLiveTally() {
     if (elPastries) elPastries.textContent = pastriesQty;
 }
 
-function interceptEodCloseout(e) {
-    e.preventDefault();
+function interceptUnifiedCloseoutConfirm() {
+    // Require the operator to review the Smart Deduction preview before the final save
+    if (!window._smartLastPreview) {
+        showToast('Run "Calculate Usage & Preview Deduction" first, then confirm.', 'error');
+        return;
+    }
     openSecurityModal(() => {
-        submitDailyShiftCloseAction();
+        applyUnifiedCloseout();
     });
 }
 
-function submitDailyShiftCloseAction() {
-    const shiftDate = document.getElementById('shift-close-date').value;
-    const posTotal = parseFloat(document.getElementById('shift-pos-total').value) || 0;
-    const discountAmount = parseFloat(document.getElementById('shift-discount-amount').value) || 0;
-
-    const qtyInputs = document.querySelectorAll('.eod-item-qty');
-    const itemsSold = [];
-
-    qtyInputs.forEach(input => {
-        const qty = parseInt(input.value, 10) || 0;
-        if (qty > 0) {
-            itemsSold.push({
-                menu_item_id: parseInt(input.dataset.menuId, 10),
-                quantity_sold: qty
-            });
-        }
-    });
-
+function applyUnifiedCloseout() {
+    const shiftDate = document.getElementById('shift-close-date')?.value;
     if (!shiftDate) {
         showToast('Please select a shift date.', 'error');
         return;
     }
 
-    fetch('/api/admin/inventory/close-shift', {
+    const soldItems = smartCollectSoldItems();
+    if (!soldItems.length) {
+        showToast('Enter at least one item sold first.', 'error');
+        return;
+    }
+
+    const posTotal = parseFloat(document.getElementById('shift-pos-total')?.value) || 0;
+    const discountAmount = parseFloat(document.getElementById('shift-discount-amount')?.value) || 0;
+    const confirmBtn = document.getElementById('smart-confirm-btn');
+
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (confirmBtn) confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving Closeout & Deducting...';
+
+    fetch('/api/admin/inventory/unified-closeout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             shift_date: shiftDate,
             total_sales_amount: posTotal,
             discount_amount: discountAmount,
-            items_sold: itemsSold
+            items: soldItems
         })
     })
     .then(res => res.json())
     .then(res => {
-        if (res.success) {
-            showToast('Daily EOD Shift Closeout successfully executed!');
-            document.getElementById('form-eod-closeout').reset();
-            initEodFormDate();
-            loadInventoryItems();
-            loadDashboardData();
-            loadCloseoutHistory();
-        } else {
-            showToast(res.error || 'Failed to execute EOD Shift Closeout.', 'error');
+        if (!res.success) {
+            showToast(res.error || 'Failed to execute unified EOD closeout.', 'error');
+            return;
         }
+        showToast('Unified EOD Closeout saved! Shift finances, itemized sales, container deductions & remainders committed in one transaction.');
+        smartClearPreview();
+        renderSmartPreview(res, true);
+        loadInventoryItems();
+        loadCloseoutHistory();
+        loadDashboardData();
+        loadSmartContainerCards();
     })
     .catch(() => {
-        showToast('Server connection error during shift closeout.', 'error');
+        showToast('Server connection error during unified EOD closeout.', 'error');
+    })
+    .finally(() => {
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Confirm Closeout &amp; Deduct Inventory';
+        }
     });
 }
 
@@ -1135,7 +1172,6 @@ function registerNewInventoryContainer(e) {
     const qty = parseInt(document.getElementById('new-inv-qty').value, 10) || 0;
     const threshold = parseInt(document.getElementById('new-inv-threshold').value, 10) || 5;
     const cost = parseFloat(document.getElementById('new-inv-cost').value) || 0.0;
-    const linkedMenuId = document.getElementById('new-inv-menu-id')?.value;
 
     if (!name || !unit) {
         showToast('Name and Unit type are required.', 'error');
@@ -1150,18 +1186,14 @@ function registerNewInventoryContainer(e) {
             container_unit: unit, 
             stock_quantity: qty, 
             safety_threshold: threshold, 
-            item_cost: cost,
-            linked_menu_item_id: linkedMenuId ? parseInt(linkedMenuId, 10) : null 
+            item_cost: cost
         })
     })
     .then(res => res.json())
     .then(res => {
         if (res.success) {
-            showToast('New bulk container registered with menu linkage!');
+            showToast('New bulk container registered! Use + Link Menu Item on its card to attach menu items.');
             document.getElementById('form-register-container').reset();
-            // Reset dropdown text
-            const triggerText = document.querySelector('#new-inv-menu-dropdown .dropdown-selected-text');
-            if (triggerText) triggerText.textContent = '-- None (Unlinked) --';
             loadInventoryItems();
             loadDashboardData();
         } else {
@@ -1591,28 +1623,8 @@ function loadMenuItems() {
             allMenuItems = items || [];
             filterAndSortMenuCatalog();
             renderEodMenuGrid(allMenuItems);
-            populateRegisterMenuDropdown(allMenuItems);
         })
         .catch(err => console.error('Error loading menu:', err));
-}
-
-function populateRegisterMenuDropdown(menuItems) {
-    const menuEl = document.getElementById('new-inv-menu-options');
-    if (!menuEl) return;
-
-    menuEl.innerHTML = `<div class="dropdown-option" onclick="selectCustomOption(this, '', 'new-inv-menu-id')">-- None (Unlinked) --</div>`;
-    
-    if (menuItems && menuItems.length > 0) {
-        menuItems.forEach(item => {
-            const opt = document.createElement('div');
-            opt.className = 'dropdown-option';
-            opt.textContent = `${item.name} (${item.category})`;
-            opt.onclick = function() {
-                selectCustomOption(this, item.id, 'new-inv-menu-id');
-            };
-            menuEl.appendChild(opt);
-        });
-    }
 }
 
 function renderMenuTable(items) {
@@ -2410,21 +2422,11 @@ function reorderItem(id, direction, type = 'menu') {
     });
 }
 /* ===========================================================================
-   ULTRA SMART INVENTORY TRACKER (additive section)
+   ULTRA SMART INVENTORY — many-to-many linking + unified EOD closeout engine
+   Lives inside the Inventory & Supply tab (PART 2 merge). Container cards &
+   recipe links: "Smart Recipe Links" sub-tab. Closeout: "EOD Closeout & Smart
+   Deductions" sub-tab.
    =========================================================================== */
-function switchSmartSubTab(subName, btn) {
-    document.querySelectorAll('#tab-smart .smart-sub-pane').forEach(p => {
-        p.style.display = 'none';
-    });
-    document.querySelectorAll('#tab-smart .sub-tab-btn').forEach(b => b.classList.remove('active'));
-    const pane = document.getElementById(`smart-subtab-${subName}`);
-    if (pane) pane.style.display = 'block';
-    if (btn) btn.classList.add('active');
-    if (subName === 'recipes') loadSmartContainerCards();
-    if (subName === 'eod') loadSmartEODForm();
-    document.getElementById('smart-confirm-btn').style.display = 'none';
-}
-
 function loadSmartContainerCards() {
     Promise.all([
         fetch('/api/admin/inventory/container-cards').then(r => r.json()),
@@ -2478,18 +2480,29 @@ function loadSmartContainerCards() {
                     </div>
                     <div style="margin: 10px 0;">${openedText}</div>
                     ${menuRows}
+                    <button type="button" class="btn-action smart-large-link-btn" onclick="openSmartLinkModal(${card.inventory_item_id})">
+                        <i class="fa-solid fa-plus"></i> Link Menu Item
+                    </button>
                 </div>`;
         }).join('');
     })
     .catch(err => showToast('Failed to load Smart Inventory cards: ' + err.message, 'error'));
 }
 
-function openSmartLinkModal() {
+// Quick Link Modal: optionally pre-select (and highlight) the container chosen from the card
+function openSmartLinkModal(preselectInventoryId) {
     const menuSel = document.getElementById('smart-link-menu');
     const invSel = document.getElementById('smart-link-inventory');
     menuSel.innerHTML = (window._smartMenuCache || []).map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
     invSel.innerHTML = (window._smartInventoryCache || []).map(i => `<option value="${i.id}">${escapeHtml(i.item_name)} (${escapeHtml(i.container_unit)})</option>`).join('');
     ['smart-link-usage', 'smart-link-container-qty'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('smart-link-usage').dataset.recipeId = '';
+    document.getElementById('smart-link-usage').dataset.oldInventoryId = '';
+    document.getElementById('smart-link-usage').dataset.oldMenuId = '';
+    if (preselectInventoryId) {
+        const exists = [...invSel.options].some(o => parseInt(o.value, 10) === parseInt(preselectInventoryId, 10));
+        if (exists) invSel.value = String(preselectInventoryId);
+    }
     document.getElementById('smart-link-modal').style.display = 'flex';
 }
 
@@ -2563,52 +2576,46 @@ function submitSmartLink() {
     }
 }
 
-function loadSmartEODForm() {
-    fetch('/api/admin/menu')
-        .then(r => r.json())
-        .then(menuItems => {
-            const grid = document.getElementById('smart-eod-menu-items-grid');
-            if (!grid) return;
-            window._smartMenuCache = menuItems || [];
-            grid.innerHTML = (menuItems || []).map(item => `
-                <div class="eod-item-card">
-                    <div class="eod-item-header">
-                        <span>${escapeHtml(item.name)}</span>
-                        <span class="eod-item-price">₱${parseFloat(item.price).toFixed(2)}</span>
-                    </div>
-                    <div class="eod-item-input-wrapper">
-                        <label>Units Sold:</label>
-                        <input type="number" min="0" value="0" class="eod-item-qty smart-eod-qty" data-menu-id="${item.id}" placeholder="e.g., 10" oninput="smartClearPreview()">
-                    </div>
-                </div>
-            `).join('');
-        });
-}
-
 function smartCollectSoldItems() {
     const soldItems = [];
-    document.querySelectorAll('#smart-eod-menu-items-grid .smart-eod-qty').forEach(input => {
+    document.querySelectorAll('#eod-menu-items-grid .eod-item-qty').forEach(input => {
         const menuId = parseInt(input.dataset.menuId, 10);
         const qty = parseInt(input.value, 10) || 0;
-        if (menuId && qty > 0) soldItems.push({ menu_item_id: menuId, quantity_sold: qty });
+        const unitPrice = parseFloat(input.dataset.price) || 0;
+        if (menuId && qty > 0) soldItems.push({ menu_item_id: menuId, quantity_sold: qty, unit_price: unitPrice });
     });
     return soldItems;
 }
 
 function smartClearPreview() {
-    document.getElementById('smart-confirm-btn').style.display = 'none';
+    const confirmBtn = document.getElementById('smart-confirm-btn');
+    if (confirmBtn) confirmBtn.style.display = 'none';
     window._smartLastPreview = null;
+    const drawer = document.getElementById('smart-preview-results');
+    if (drawer) drawer.innerHTML = '';
 }
 
-function renderSmartPreview(data) {
+function renderSmartPreview(data, isApplied = false) {
     const el = document.getElementById('smart-preview-results');
+    if (!el) return;
     let html = '';
+
+    // Financial tally straight from the unified engine (gross/net of this shift)
+    const fin = data.financials;
+    const finHtml = fin
+        ? `<div class="smart-fin-bar">
+               <div><span>POS Sales:</span> <strong>\u20B1${(fin.pos_sales !== null && fin.pos_sales !== undefined) ? fin.pos_sales.toFixed(2) : `${fin.gross_from_items.toFixed(2)} (from items)`}</strong></div>
+               <div><span>Discounts:</span> <strong>\u20B1${fin.discounts.toFixed(2)}</strong></div>
+               <div><span>Net Sales:</span> <strong>\u20B1${fin.net_sales.toFixed(2)}</strong></div>
+           </div>`
+        : '';
+
     const warns = (data.warnings || []).concat((data.containers || []).filter(c => c.warning).map(c => ({ message: c.message, warning: c.warning })));
     if (warns.length) {
         html += warns.map(w => `<div class="smart-warn-box"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(w.message || w.warning || 'Warning')}</div>`).join('');
     }
     if (!data.containers || !data.containers.length) {
-        html += '<div style="padding:10px;color:#777;">No linked containers found for the menu items entered.</div>';
+        html += '<div style="padding:10px;color:#777;">No linked containers found for the menu items entered. Attach recipe links in the Smart Recipe Links sub-tab so usage can be deducted.</div>';
     } else {
         html += data.containers.map(c => `
             <div class="smart-result-card">
@@ -2619,53 +2626,48 @@ function renderSmartPreview(data) {
                 <div class="smart-result-grid">
                     <div>Sold this shift: <strong>${c.items_sold}</strong></div>
                     <div>Total used: <strong>${c.total_used} ${c.usage_unit}</strong></div>
-                    <div>Opened with: <strong>${c.opened_before} ${c.usage_unit}</strong></div>
-                    <div>Whole containers used: <strong>${c.whole_containers}</strong></div>
-                    <div>Left in opened container: <strong>${c.remainder} ${c.usage_unit}</strong></div>
-                    ${data.preview ? '' : `<div>Stock before \u2192 after: <strong>${c.stock_before} \u2192 ${c.stock_after}</strong></div>`}
+                    <div>Opening remainder: <strong>${c.opened_before} ${c.usage_unit}</strong></div>
+                    <div>Whole containers deducted: <strong>${c.whole_containers}</strong></div>
+                    <div>Stock before \u2192 after: <strong>${c.stock_before} \u2192 ${c.stock_after}</strong></div>
+                    <div>Ending remainder in opened container: <strong>${c.remainder} ${c.usage_unit}</strong></div>
                 </div>
                 <div style="font-size:0.85rem;color:#555;margin-top:8px;"><i class="fa-solid fa-scale-balanced"></i> ${escapeHtml(c.remaining_text || '')}</div>
             </div>
         `).join('');
     }
-    el.innerHTML = html;
-    document.getElementById('smart-confirm-btn').style.display = 'block';
+    el.innerHTML = (isApplied ? '<div class="smart-applied-banner"><i class="fa-solid fa-circle-check"></i> Closeout committed — inventory deductions &amp; remainder rollovers saved.</div>' : '') + finHtml + html;
+    const confirmBtn = document.getElementById('smart-confirm-btn');
+    if (confirmBtn) confirmBtn.style.display = isApplied ? 'none' : 'block';
 }
 
 function previewSmartShift() {
+    const shiftDate = document.getElementById('shift-close-date')?.value;
+    if (!shiftDate) { showToast('Please select a shift date first.', 'error'); return; }
+
     const soldItems = smartCollectSoldItems();
     if (!soldItems.length) { showToast('Enter at least one item sold first.', 'error'); return; }
-    fetch('/api/admin/inventory/calc-shift-usage', {
+
+    const posTotal = parseFloat(document.getElementById('shift-pos-total')?.value) || 0;
+    const discountAmount = parseFloat(document.getElementById('shift-discount-amount')?.value) || 0;
+
+    fetch('/api/admin/inventory/unified-closeout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preview: true, shift_date: new Date().toISOString().slice(0, 10), items: soldItems })
+        body: JSON.stringify({
+            preview: true,
+            shift_date: shiftDate,
+            total_sales_amount: posTotal,
+            discount_amount: discountAmount,
+            items: soldItems
+        })
     })
     .then(r => r.json())
     .then(data => {
         if (!data.success) { showToast(data.error || 'Preview failed.', 'error'); return; }
         window._smartLastPreview = data;
         renderSmartPreview(data);
+        const confirmBtn = document.getElementById('smart-confirm-btn');
+        if (confirmBtn) confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
     })
     .catch(err => showToast('Preview failed: ' + err.message, 'error'));
-}
-
-function applySmartShift() {
-    if (!window._smartLastPreview) { showToast('Run the Calculate Preview first.', 'error'); return; }
-    if (!confirm('Confirm deducting the previewed usage from bulk container stock?')) return;
-    const soldItems = smartCollectSoldItems();
-    fetch('/api/admin/inventory/calc-shift-usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preview: false, shift_date: new Date().toISOString().slice(0, 10), items: soldItems })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (!data.success) { showToast(data.error || 'Failed to apply.', 'error'); return; }
-        showToast('Smart shift usage applied!');
-        window._smartLastPreview = null;
-        document.getElementById('smart-confirm-btn').style.display = 'none';
-        renderSmartPreview(data);
-        loadSmartContainerCards();
-    })
-    .catch(err => showToast('Apply failed: ' + err.message, 'error'));
 }

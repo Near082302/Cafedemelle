@@ -1901,6 +1901,78 @@ select:focus,
     font-size: 0.88rem;
 }
 
+/* PART 2: numeric stepper for "Units Sold Today" entries */
+.eod-stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.eod-stepper input {
+    text-align: center;
+    width: 70px !important;
+    flex: 0 0 auto !important;
+}
+
+.eod-stepper-btn {
+    background: var(--alt-bg, #f5f1e8);
+    border: 1px solid var(--secondary, #0b4d0b);
+    color: var(--primary, #0b4d0b);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.eod-stepper-btn:hover { background: var(--secondary, #0b4d0b); color: #fff; }
+
+/* PART 2: per-card quick link button */
+.smart-large-link-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    background-color: transparent;
+    border: 2px dashed var(--secondary, #0b4d0b);
+    color: var(--primary, #0b4d0b);
+    border-radius: 10px;
+}
+
+.smart-large-link-btn:hover { background-color: var(--secondary, #0b4d0b); color: #fff; border-style: solid; }
+
+/* PART 2: unified preview drawer — financial bar + applied banner */
+.smart-fin-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    background: var(--alt-bg, #f5f1e8);
+    border: 1px solid var(--light-accent, #d9d2c4);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 0.92rem;
+}
+
+.smart-applied-banner {
+    background: rgba(26, 127, 55, 0.12);
+    border: 1px solid rgba(26, 127, 55, 0.45);
+    color: var(--success, #1a7f37);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
 @media (max-width: 768px) {
     .smart-cards-grid { grid-template-columns: 1fr; }
+    .eod-stepper input { width: 58px !important; }
 }

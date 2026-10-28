@@ -349,13 +349,14 @@ function initDatabaseSchema() {
             redeemed_by TEXT DEFAULT 'STAFF / CASHIER'
         )`);
 
+        // PART 2 refactor: single linked_menu_item_id dropped — Many-to-Many linking now lives
+        // entirely in recipe_links (a container can serve many menu items and vice versa)
         db.run(`CREATE TABLE IF NOT EXISTS inventory_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_name TEXT UNIQUE NOT NULL,
             container_unit TEXT NOT NULL,
             stock_quantity INTEGER DEFAULT 0,
             safety_threshold INTEGER DEFAULT 5,
-            linked_menu_item_id INTEGER DEFAULT NULL,
             item_cost REAL DEFAULT 0.0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
@@ -448,6 +449,36 @@ function initDatabaseSchema() {
         )`);
 
         // Automatic DB Migrations for Existing Databases
+
+        // PART 2 REFACTOR: drop the restrictive single linked_menu_item_id column from inventory_items.
+        // Recipe links (menu_item_id <-> inventory_item_id Many-to-Many in recipe_links) fully replace it.
+        db.all(`PRAGMA table_info(inventory_items)`, [], (err, columns) => {
+            if (!err && columns && columns.some(c => c.name === 'linked_menu_item_id')) {
+                db.serialize(() => {
+                    db.run(`CREATE TABLE inventory_items_rebuilt (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        item_name TEXT UNIQUE NOT NULL,
+                        container_unit TEXT NOT NULL,
+                        stock_quantity INTEGER DEFAULT 0,
+                        safety_threshold INTEGER DEFAULT 5,
+                        item_cost REAL DEFAULT 0.0,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )`, [], (err1) => {
+                        if (err1) { console.log('🛠️ Migration error preparing rebuilt inventory_items:', err1.message); return; }
+                        db.run(`INSERT INTO inventory_items_rebuilt (id, item_name, container_unit, stock_quantity, safety_threshold, item_cost, updated_at)
+                                SELECT id, item_name, container_unit, stock_quantity, safety_threshold, item_cost, updated_at FROM inventory_items`, [], (err2) => {
+                            if (err2) { console.log('🛠️ Migration error copying inventory rows:', err2.message); db.run(`DROP TABLE inventory_items_rebuilt`); return; }
+                            db.run(`DROP TABLE inventory_items`, [], () => {
+                                db.run(`ALTER TABLE inventory_items_rebuilt RENAME TO inventory_items`, [], () => {
+                                    console.log("🛠️ Migrated DB: removed 'linked_menu_item_id' from inventory_items — recipe_links now owns all container ↔ menu links.");
+                                });
+                            });
+                        });
+                    });
+                });
+            }
+        });
+
         db.all(`PRAGMA table_info(menu_items)`, [], (err, columns) => {
     if (!err && columns && columns.length > 0) {
         const colNames = columns.map(c => c.name);
@@ -515,7 +546,7 @@ function initDatabaseSchema() {
                     ['Korean Garlic Bun Box', 'Boxes', 10, 2, null, 150.00],
                     ['Paper Coffee Cups Ream', 'Reams', 12, 3, null, 210.00]
                 ];
-                const stmt = db.prepare(`INSERT INTO inventory_items (item_name, container_unit, stock_quantity, safety_threshold, linked_menu_item_id, item_cost) VALUES (?, ?, ?, ?, ?, ?)`);
+                const stmt = db.prepare(`INSERT INTO inventory_items (item_name, container_unit, stock_quantity, safety_threshold, item_cost) VALUES (?, ?, ?, ?, ?)`);
                 defaultItems.forEach(item => stmt.run(item));
                 stmt.finalize();
                 console.log("📦 Seeded default bulk inventory containers with unit costs.");
@@ -854,7 +885,9 @@ app.get('/api/admin/dashboard-kpis', requireAuth, (req, res) => {
                         (SELECT COALESCE(SUM(p.quantity_sold * COALESCE(m.price, 0)), 0)
                          FROM pos_sales p
                          LEFT JOIN inventory_items i ON p.inventory_item_id = i.id
-                         LEFT JOIN menu_items m ON i.linked_menu_item_id = m.id
+                         LEFT JOIN menu_items m ON m.id = (
+                             SELECT MIN(rl.menu_item_id) FROM recipe_links rl WHERE rl.inventory_item_id = i.id
+                         )
                          WHERE DATE(p.timestamp) = DATE('now'))
                         +
                         (SELECT COALESCE(SUM(total_sales_amount - COALESCE(discount_amount, 0)), 0)
@@ -1084,20 +1117,34 @@ app.get('/api/admin/visit-stats', requireAuth, (req, res) => {
    =========================================================================== */
 
 app.get('/api/admin/inventory', requireAuth, (req, res) => {
+    // PART 2 Many-to-Many: every container reports ALL linked menu items from recipe_links
     const query = `
-        SELECT i.*, m.name as linked_menu_name 
-        FROM inventory_items i 
-        LEFT JOIN menu_items m ON i.linked_menu_item_id = m.id 
+        SELECT i.*,
+               (
+                   SELECT GROUP_CONCAT(m.name, '||')
+                   FROM recipe_links r
+                   LEFT JOIN menu_items m ON m.id = r.menu_item_id
+                   WHERE r.inventory_item_id = i.id
+               ) as linked_menu_names,
+               (SELECT COUNT(*) FROM recipe_links r WHERE r.inventory_item_id = i.id) as linked_menu_count
+        FROM inventory_items i
         ORDER BY i.id DESC
     `;
     db.all(query, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        const formatted = rows.map(r => ({
+            ...r,
+            linked_menu_name: r.linked_menu_names || null,
+            linked_menu_list: r.linked_menu_names ? r.linked_menu_names.split('||') : []
+        }));
+        res.json(formatted);
     });
 });
 
 app.post('/api/admin/inventory', requireAuth, (req, res) => {
-    const { item_name, container_unit, stock_quantity, safety_threshold, linked_menu_item_id, item_cost } = req.body;
+    // PART 2: container registration is strictly name/unit/stock/threshold/cost —
+    // menu linking happens afterwards via recipe_links (Quick Link / Smart Recipe Links)
+    const { item_name, container_unit, stock_quantity, safety_threshold, item_cost } = req.body;
     const performer = getActiveUser(req);
 
     if (!item_name || !container_unit) {
@@ -1109,8 +1156,8 @@ app.post('/api/admin/inventory', requireAuth, (req, res) => {
     const cost = parseFloat(item_cost) || 0.0;
 
     db.run(
-        `INSERT INTO inventory_items (item_name, container_unit, stock_quantity, safety_threshold, linked_menu_item_id, item_cost) VALUES (?, ?, ?, ?, ?, ?)`,
-        [item_name, container_unit, qty, threshold, linked_menu_item_id || null, cost],
+        `INSERT INTO inventory_items (item_name, container_unit, stock_quantity, safety_threshold, item_cost) VALUES (?, ?, ?, ?, ?)`,
+        [item_name, container_unit, qty, threshold, cost],
         function(err) {
             if (err) return res.status(400).json({ success: false, error: 'Inventory container item name already registered.' });
 
@@ -1195,9 +1242,10 @@ app.post('/api/admin/inventory/shipment', requireAuth, (req, res) => {
                 function(err) {
                     if (err) return res.status(500).json({ success: false, error: err.message });
 
-                    db.get(`SELECT item_name, linked_menu_item_id, stock_quantity FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
-                        if (inv && inv.linked_menu_item_id && inv.stock_quantity > 0) {
-                            db.run(`UPDATE menu_items SET is_available = 1 WHERE id = ?`, [inv.linked_menu_item_id]);
+                    db.get(`SELECT item_name, stock_quantity FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
+                        if (inv && inv.stock_quantity > 0) {
+                            // Many-to-Many kill-switch release: re-activate every menu item linked to this container
+                            db.run(`UPDATE menu_items SET is_available = 1 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [inventory_item_id]);
                             touchMenuUpdateTimestamp();
                         }
 
@@ -1221,7 +1269,7 @@ app.post('/api/admin/inventory/audit', requireAuth, (req, res) => {
 
     const newStockQty = parseInt(actual_stock, 10) || 0;
 
-    db.get(`SELECT item_name, stock_quantity, item_cost, linked_menu_item_id FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
+    db.get(`SELECT item_name, stock_quantity, item_cost FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
         if (!inv) return res.status(404).json({ success: false, error: 'Inventory container item not found.' });
 
         const variance = newStockQty - inv.stock_quantity;
@@ -1242,10 +1290,11 @@ app.post('/api/admin/inventory/audit', requireAuth, (req, res) => {
                     );
                 }
 
-                if (newStockQty <= 0 && inv.linked_menu_item_id) {
-                    db.run(`UPDATE menu_items SET is_available = 0 WHERE id = ?`, [inv.linked_menu_item_id]);
+                if (newStockQty <= 0) {
+                    // Many-to-Many kill-switch: disable every menu item linked to this container
+                    db.run(`UPDATE menu_items SET is_available = 0 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [inventory_item_id]);
                     touchMenuUpdateTimestamp();
-                    logAudit('MENU_KILL_SWITCH', `Automated kill-switch toggled menu item [ID: ${inv.linked_menu_item_id}] OFF due to ZERO inventory of '${inv.item_name}'`, 'System Guard');
+                    logAudit('MENU_KILL_SWITCH', `Automated kill-switch toggled ALL linked menu items OFF due to ZERO inventory of '${inv.item_name}'`, 'System Guard');
                 }
 
                 logAudit('EVENING_AUDIT', `Shift Audit (${shift_period || 'Closing'}): Reset '${inv.item_name}' stock from ${inv.stock_quantity} to ${newStockQty} (Variance: ${variance >= 0 ? '+' : ''}${variance}). Financial Loss: ₱${financialLoss.toFixed(2)}. Notes: ${notes || 'None'}`, performer);
@@ -1266,7 +1315,7 @@ app.post('/api/inventory/waste', requireAuth, (req, res) => {
 
     const qtyLost = parseInt(quantity_lost, 10) || 0;
 
-    db.get(`SELECT item_name, stock_quantity, item_cost, linked_menu_item_id FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
+    db.get(`SELECT item_name, stock_quantity, item_cost FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
         if (!inv) return res.status(404).json({ success: false, error: 'Inventory item not found.' });
 
         const unitCost = inv.item_cost || 0.0;
@@ -1286,8 +1335,9 @@ app.post('/api/inventory/waste', requireAuth, (req, res) => {
                     function(err) {
                         if (err) return res.status(500).json({ success: false, error: err.message });
 
-                        if (updatedQty <= 0 && inv.linked_menu_item_id) {
-                            db.run(`UPDATE menu_items SET is_available = 0 WHERE id = ?`, [inv.linked_menu_item_id]);
+                        if (updatedQty <= 0) {
+                            // Many-to-Many kill-switch: disable every menu item linked to this container
+                            db.run(`UPDATE menu_items SET is_available = 0 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [inventory_item_id]);
                             touchMenuUpdateTimestamp();
                         }
 
@@ -1342,6 +1392,8 @@ app.post('/api/admin/inventory/close-shift', requireAuth, (req, res) => {
     const discAmount = parseFloat(discount_amount) || 0.0;
     const items = Array.isArray(items_sold) ? items_sold : [];
 
+    // PART 2: legacy single-link stock deduction removed. Financial shift records are saved here;
+    // inventory usage deductions are handled transactionally by the unified smart closeout engine.
     db.serialize(() => {
         db.run(
             `INSERT INTO shift_closeouts (shift_date, total_sales_amount, discount_amount, logged_by) VALUES (?, ?, ?, ?)`,
@@ -1358,23 +1410,6 @@ app.post('/api/admin/inventory/close-shift', requireAuth, (req, res) => {
 
                     if (menuId && qtySold > 0) {
                         closeoutStmt.run(closeoutId, menuId, qtySold);
-
-                        db.get(`SELECT id, item_name, stock_quantity FROM inventory_items WHERE linked_menu_item_id = ?`, [menuId], (err, invItem) => {
-                            if (!err && invItem) {
-                                const newStock = Math.max(0, invItem.stock_quantity - qtySold);
-                                db.run(
-                                    `UPDATE inventory_items SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                                    [newStock, invItem.id],
-                                    (err) => {
-                                        if (!err && newStock <= 0) {
-                                            db.run(`UPDATE menu_items SET is_available = 0 WHERE id = ?`, [menuId]);
-                                            touchMenuUpdateTimestamp();
-                                            logAudit('MENU_KILL_SWITCH', `Automated kill-switch toggled menu item [ID: ${menuId}] OFF due to ZERO inventory level during EOD Shift Closeout.`, 'System Guard');
-                                        }
-                                    }
-                                );
-                            }
-                        });
                     }
                 });
 
@@ -1766,18 +1801,14 @@ app.delete('/api/admin/recipes/:id', requireAuth, (req, res) => {
     });
 });
 
-// End-of-day calculation engine: items sold -> containers used + remainder
-// Body: { shift_date, items: [{menu_item_id, quantity_sold}], preview }
-app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
-    const { shift_date } = req.body;
-    const isPreview = req.body.preview === true || req.body.preview === 'true';
-    const performer = getActiveUser(req);
-    const soldItems = Array.isArray(req.body.items) ? req.body.items : [];
+/* ===========================================================================
+   11.75 SMART EOD COMPUTATION ENGINE (Part 2 unified closeout)
+   =========================================================================== */
 
-    if (!soldItems.length) {
-        return res.status(400).json({ success: false, error: 'items_sold list is required.' });
-    }
-
+// SHARED COMPUTE HELPER: sold menu items -> per-container usage + whole-container
+// deductions + remainder carry-over. Pure computation, performs no writes.
+// Callback receives: { containers: [...], warnings: [...] }
+function computeSmartLedger(soldItems, cb) {
     const soldMap = {};
     soldItems.forEach(i => {
         const id = parseInt(i.menu_item_id, 10);
@@ -1786,7 +1817,7 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
     });
     const menuIds = Object.keys(soldMap).map(Number);
     if (!menuIds.length) {
-        return res.status(400).json({ success: false, error: 'No valid menu_item_id provided.' });
+        return cb(new Error('No valid menu_item_id provided.'));
     }
 
     const placeholders = menuIds.map(() => '?').join(',');
@@ -1799,7 +1830,7 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
         WHERE r.menu_item_id IN (${placeholders})
         ORDER BY r.inventory_item_id ASC
     `, menuIds, (err, links) => {
-        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (err) return cb(err);
 
         // Warn for sold items with no recipe links (they are NOT deducted on confirm)
         const warnings = [];
@@ -1822,7 +1853,7 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
                 SELECT inventory_item_id, MAX(id) AS last_id FROM usage_logs GROUP BY inventory_item_id
             ) last ON last.last_id = u.id
         `, [], (err2, remainderRows) => {
-            if (err2) return res.status(500).json({ success: false, error: err2.message });
+            if (err2) return cb(err2);
             const lastRemainder = {};
             remainderRows.forEach(r => { lastRemainder[r.inventory_item_id] = r; });
 
@@ -1862,8 +1893,6 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
                     c.warning = c.warning || 'STOCK_OVERFLOW';
                     c.message = c.message || `Usage exceeds stock: needs ${wholeUsed} whole container(s) of ${link.item_name}, only ${Math.floor(c.stock_before)} in stock. Stock will not go below zero.`;
                     wholeUsed = Math.max(0, Math.floor(c.stock_before));
-                } else if (wholeUsed + Math.floor(c.stock_before) > 0 && c.stock_before < 0.5 && usedThisLink > 0) {
-                    // stock empty but remainder in ledger still available — handled by remainder carry-over
                 }
 
                 c.whole_containers += wholeUsed;
@@ -1896,6 +1925,25 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
                 warning: c.warning || null,
                 message: c.message || null
             }));
+
+            cb(null, { containers: containerResults, warnings });
+        });
+    });
+}
+
+// Legacy granular endpoint kept for backwards compatibility (preview + raw apply)
+app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
+    const { shift_date } = req.body;
+    const isPreview = req.body.preview === true || req.body.preview === 'true';
+    const performer = getActiveUser(req);
+    const soldItems = Array.isArray(req.body.items) ? req.body.items : [];
+
+    if (!soldItems.length) {
+        return res.status(400).json({ success: false, error: 'items_sold list is required.' });
+    }
+
+    computeSmartLedger(soldItems, (err, { containers: containerResults, warnings }) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
 
             if (isPreview) {
                 return res.json({ success: true, preview: true, shift_date: shift_date || null, containers: containerResults, warnings });
@@ -1965,6 +2013,166 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
                     }
                 }, 25);
             });
+    });
+});
+
+// UNIFIED END-OF-DAY CLOSEOUT (Part 2): ONE transaction saves everything —
+// shift financial record, itemized sales, container stock deductions, usage_logs
+// remainder rollovers, and Many-to-Many kill-switches. preview=true returns the
+// exact same breakdown without touching a single row.
+// Body: { shift_date, total_sales_amount, discount_amount, items: [{menu_item_id, quantity_sold}], preview }
+app.post('/api/admin/inventory/unified-closeout', requireAuth, (req, res) => {
+    const { shift_date } = req.body;
+    const isPreview = req.body.preview === true || req.body.preview === 'true';
+    const performer = getActiveUser(req);
+    const soldItems = Array.isArray(req.body.items) ? req.body.items : [];
+    const hasFinancials = req.body.total_sales_amount !== undefined;
+    const salesAmount = parseFloat(req.body.total_sales_amount) || 0.0;
+    const discAmount = parseFloat(req.body.discount_amount) || 0.0;
+
+    if (!shift_date) {
+        return res.status(400).json({ success: false, error: 'Shift date is required.' });
+    }
+    if (hasFinancials && salesAmount < 0) {
+        return res.status(400).json({ success: false, error: 'Total POS sales cannot be negative.' });
+    }
+    if (!soldItems.length) {
+        return res.status(400).json({ success: false, error: 'Enter at least one item sold for this shift.' });
+    }
+    const grossFromItems = soldItems.reduce((sum, i) => sum + ((parseInt(i.quantity_sold, 10) || 0) * (parseFloat(i.unit_price) || 0)), 0);
+    const netSales = Math.max(0, (hasFinancials ? salesAmount : grossFromItems) - discAmount);
+
+    computeSmartLedger(soldItems, (err, { containers: containerResults, warnings }) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+
+        if (isPreview) {
+            return res.json({
+                success: true,
+                preview: true,
+                shift_date,
+                containers: containerResults,
+                warnings,
+                financials: {
+                    has_input: hasFinancials,
+                    pos_sales: hasFinancials ? salesAmount : null,
+                    gross_from_items: Math.round(grossFromItems * 100) / 100,
+                    discounts: discAmount,
+                    net_sales: Math.round(netSales * 100) / 100
+                }
+            });
+        }
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+            let txError = null;
+
+            // Ordered queue of write steps — every step must succeed or the ENTIRE
+            // closeout (financial log + itemized sales + deductions + remainders) rolls back.
+            const steps = [];
+
+            // Step 1: shift closeout financial record + itemized sales ledger
+            steps.push((done) => {
+                db.run(
+                    `INSERT INTO shift_closeouts (shift_date, total_sales_amount, discount_amount, logged_by) VALUES (?, ?, ?, ?)`,
+                    [shift_date, salesAmount, discAmount, performer],
+                    function (err) {
+                        if (err) { txError = txError || err.message; return done(); }
+                        const closeoutId = this.lastID;
+                        const stmt = db.prepare(`INSERT INTO shift_closeout_items (closeout_id, menu_item_id, quantity_sold) VALUES (?, ?, ?)`);
+                        soldItems.forEach(item => {
+                            const menuId = parseInt(item.menu_item_id, 10);
+                            const qty = parseInt(item.quantity_sold, 10) || 0;
+                            if (menuId && qty > 0) stmt.run(closeoutId, menuId, qty);
+                        });
+                        stmt.finalize();
+                        done();
+                    }
+                );
+            });
+
+            // Step 2+: per-container stock deduction + usage log (remainder rollover) + Many-to-Many kill-switch
+            containerResults.forEach(c => {
+                steps.push((done) => {
+                    const writeUsageLog = () => {
+                        db.run(`
+                            INSERT INTO usage_logs
+                                (inventory_item_id, menu_items_summary, items_sold, total_used, whole_containers, remainder, opened_before, usage_unit, calculation_date, logged_by)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `, [
+                            c.inventory_item_id,
+                            c.menu_items_summary,
+                            c.items_sold,
+                            c.total_used,
+                            c.whole_containers,
+                            c.remainder,
+                            c.opened_before,
+                            c.usage_unit,
+                            shift_date,
+                            performer
+                        ], (err) => {
+                            if (err) txError = txError || err.message;
+                            done();
+                        });
+                    };
+
+                    if (c.whole_containers > 0) {
+                        db.run(
+                            `UPDATE inventory_items SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                            [c.whole_containers, c.inventory_item_id],
+                            (err) => {
+                                if (err) { txError = txError || err.message; return done(); }
+                                db.get(`SELECT stock_quantity FROM inventory_items WHERE id = ?`, [c.inventory_item_id], (err2, row) => {
+                                    if (err2) { txError = txError || err2.message; return done(); }
+                                    if (row && row.stock_quantity <= 0) {
+                                        db.run(`UPDATE menu_items SET is_available = 0 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [c.inventory_item_id], () => {
+                                            touchMenuUpdateTimestamp();
+                                            logAudit('MENU_KILL_SWITCH', `Unified EOD closeout: bulk container '${c.item_name}' [ID: ${c.inventory_item_id}] reached zero — all linked menu items auto-disabled.`, performer);
+                                            writeUsageLog();
+                                        });
+                                    } else {
+                                        writeUsageLog();
+                                    }
+                                });
+                            }
+                        );
+                    } else {
+                        writeUsageLog();
+                    }
+                });
+            });
+
+            let idx = 0;
+            const nextStep = () => {
+                if (txError) {
+                    db.run('ROLLBACK', () => res.status(500).json({ success: false, error: txError }));
+                    return;
+                }
+                if (idx >= steps.length) {
+                    db.run('COMMIT', (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ success: false, error: err.message });
+                        }
+                        logAudit('UNIFIED_EOD_CLOSEOUT', `Unified EOD Closeout for ${shift_date}: Sales ₱${salesAmount.toFixed(2)} (Disc ₱${discAmount.toFixed(2)}, Net ₱${netSales.toFixed(2)}), ${soldItems.length} menu lines, ${containerResults.length} containers deducted.`, performer);
+                        res.json({
+                            success: true,
+                            applied: true,
+                            closeout_saved: true,
+                            shift_date,
+                            containers: containerResults,
+                            warnings,
+                            financials: {
+                                pos_sales: salesAmount,
+                                discounts: discAmount,
+                                net_sales: Math.round(netSales * 100) / 100
+                            }
+                        });
+                    });
+                    return;
+                }
+                steps[idx++](nextStep);
+            };
+            nextStep();
         });
     });
 });

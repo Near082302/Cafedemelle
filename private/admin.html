@@ -44,10 +44,7 @@
                 <i class="fa-solid fa-ticket"></i> Cashier Promo
             </li>
             <li onclick="switchTab('inventory', this)">
-                <i class="fa-solid fa-boxes-stacked"></i> Inventory & Supply
-            </li>
-            <li onclick="switchTab('smart', this)">
-                <i class="fa-solid fa-brain"></i> Ultra Smart Tracker
+                <i class="fa-solid fa-boxes-stacked"></i> Inventory &amp; Supply
             </li>
             <li onclick="switchTab('invoices', this)">
                 <i class="fa-solid fa-book-open-reader"></i> Operational Ledgers
@@ -327,7 +324,10 @@
                     <i class="fa-solid fa-box-archive"></i> Register Container
                 </button>
                 <button class="sub-tab-btn" onclick="switchInventorySubTab('eod', this)">
-                    <i class="fa-solid fa-receipt"></i> Daily EOD Shift Closeout
+                    <i class="fa-solid fa-calculator"></i> EOD Closeout &amp; Smart Deductions
+                </button>
+                <button class="sub-tab-btn" onclick="switchInventorySubTab('recipes', this)">
+                    <i class="fa-solid fa-link"></i> Smart Recipe Links
                 </button>
             </div>
 
@@ -342,7 +342,7 @@
                                     <th>Unit Type</th>
                                     <th>In Stock</th>
                                     <th>Safety Threshold</th>
-                                    <th>Linked Menu Item</th>
+                                    <th>Linked Menu Items</th>
                                     <th>Unit Cost</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -517,23 +517,10 @@
                 </div>
             </div>
 
-            
-
-            <!-- ADDED: Linked Menu Item Dropdown -->
+            <!-- PART 2: menu item linking intentionally removed from registration —
+                 containers and menu items link Many-to-Many afterwards via recipe_links
+                 (see the Smart Recipe Links sub-tab) -->
             <div class="form-group">
-                <label>Linked Menu Item (Triggers Kill-Switch when Stock = 0):</label>
-                <div class="custom-dropdown" id="new-inv-menu-dropdown">
-                    <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
-                        <span class="dropdown-selected-text">-- None (Unlinked) --</span>
-                        <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
-                    </div>
-                    <div class="dropdown-menu" id="new-inv-menu-options" style="max-height: 220px; overflow-y: auto;">
-                        <!-- Populated via admin.js -->
-                    </div>
-                    <input type="hidden" id="new-inv-menu-id" value="">
-                </div>
-            </div>
-                        <div class="form-group">
                             <label>Initial Stock Quantity:</label>
                             <input type="number" id="new-inv-qty" value="10" min="0" placeholder="e.g., 10">
                         </div>
@@ -552,9 +539,14 @@
 
             <div id="inv-subtab-eod" class="sub-tab-pane">
                 <div class="panel-card">
-                    <h2><i class="fa-solid fa-receipt"></i> Daily EOD Shift Closeout</h2> 
+                    <h2><i class="fa-solid fa-calculator"></i> EOD Closeout &amp; Smart Deductions</h2>
+                    <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
+                        One seamless end-of-day closeout: log the shift financials, tally what you sold, then let the Smart Engine
+                        preview the exact container usage (whole bags + gram/ml remainders) before a single transactional save.
+                    </p>
 
-                    <form id="form-eod-closeout" onsubmit="interceptEodCloseout(event)">
+                    <div id="form-eod-closeout">
+                        <!-- ============ TOP SECTION: SHIFT FINANCIALS ============ -->
                         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-bottom:15px;">
                             <div class="form-group">
                                 <label for="shift-close-date">Shift Date:</label>
@@ -562,7 +554,7 @@
                             </div>
                             <div class="form-group">
                                 <label for="shift-pos-total">Total POS Sales (₱):</label>
-                                <input type="number" step="0.01" id="shift-pos-total" placeholder="e.g., 12500.00" required min="0" oninput="updateEodLiveTally()">
+                                <input type="number" step="0.01" id="shift-pos-total" placeholder="e.g., 12500.00" min="0" oninput="updateEodLiveTally()">
                             </div>
                             <div class="form-group">
                                 <label for="shift-discount-amount">Shift Discounts Deducted (₱):</label>
@@ -570,7 +562,7 @@
                             </div>
                         </div>
 
-                        <!-- EOD Search & Category Filter Pills -->
+                        <!-- ============ MIDDLE SECTION: SEARCHABLE SOLD-TODAY GRID ============ -->
                         <div class="menu-toolbelt" style="margin-bottom: 15px;">
                             <div class="menu-search-wrapper">
                                 <i class="fa-solid fa-magnifying-glass" style="color:var(--secondary);"></i>
@@ -586,7 +578,7 @@
                             </div>
                         </div>
 
-                        <!-- EOD Live Shift Tally Card -->
+                        <!-- Live Shift Tally Bar -->
                         <div class="eod-live-tally-card" style="background:var(--alt-bg); border:1px solid var(--light-accent); border-radius:10px; padding:16px; margin-bottom:15px;">
                             <h3 style="font-size:1.05rem; color:var(--primary); margin-bottom:8px; display:flex; align-items:center; gap:8px;">
                                 <i class="fa-solid fa-calculator"></i> EOD Live Shift Tally
@@ -607,107 +599,78 @@
                             <div id="eod-menu-items-grid" class="eod-items-grid-scroll"></div>
                         </div>
 
+                        <!-- ============ BOTTOM SECTION: PREVIEW & FINAL ACTION ============ -->
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
-                            <button type="submit" class="btn-action" style="flex: 1 1 auto;">
-                                <i class="fa-solid fa-file-signature"></i> Execute Shift Closeout &amp; Update Inventory
+                            <button type="button" class="btn-action" style="flex: 1 1 auto; background-color: var(--bronze-accent);" onclick="previewSmartShift()">
+                                <i class="fa-solid fa-eye"></i> Calculate Usage &amp; Preview Deduction
                             </button>
                             <button type="button" class="btn-action" style="background-color: var(--bronze-accent);" onclick="openMasterTicketModal()">
                                 <i class="fa-solid fa-print"></i> Generate Daily Master Audit Ticket
                             </button>
                         </div>
-                    </form>
+
+                        <!-- Preview drawer: detailed breakdown across all connected containers -->
+                        <div id="smart-preview-results" style="margin-top:20px;"></div>
+
+                        <button type="button" class="btn-action smart-confirm-btn" id="smart-confirm-btn" onclick="interceptUnifiedCloseoutConfirm()" style="display:none; margin-top:15px; background-color: var(--success, #1a7f37);">
+                            <i class="fa-solid fa-check-double"></i> Confirm Closeout &amp; Deduct Inventory
+                        </button>
+                    </div>
                 </div>
             </div>
-        </section>
 
-
-        <!-- ===================================================================
-             ULTRA SMART INVENTORY TRACKER TAB (additive feature)
-             =================================================================== -->
-        <section id="tab-smart" class="tab-section">
-            <div class="panel-card">
-                <h2><i class="fa-solid fa-brain"></i> Ultra Smart Inventory Tracker</h2>
-                <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
-                    Every registered bulk container shows each menu item linked to it and how much grams/ml one serving consumes.
-                    Enter items sold at end of day, preview the calculation, then confirm to deduct whole containers + remainder usage.
-                </p>
-
-                <!-- Sub tabs -->
-                <div class="sub-tab-bar" style="margin-bottom: 20px;">
-                    <button class="sub-tab-btn active" onclick="switchSmartSubTab('recipes', this)">
-                        <i class="fa-solid fa-link"></i> Container Cards &amp; Recipe Links
-                    </button>
-                    <button class="sub-tab-btn" onclick="switchSmartSubTab('eod', this)">
-                        <i class="fa-solid fa-calculator"></i> End-of-Day Shift Calculation
-                    </button>
-                </div>
-
-                <!-- Sub-tab 1: container cards -->
-                <div id="smart-subtab-recipes" class="smart-sub-pane" style="display:block;">
-                    <button type="button" class="btn-action" style="margin-bottom:15px;" onclick="openSmartLinkModal()">
-                        <i class="fa-solid fa-plus"></i> Link Menu Item to Bulk Container
-                    </button>
+            <div id="inv-subtab-recipes" class="sub-tab-pane">
+                <div class="panel-card">
+                    <h2><i class="fa-solid fa-link"></i> Smart Recipe Links (Container &harr; Menu Items)</h2>
+                    <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
+                        Every registered bulk container shows each menu item linked to it and how many grams/ml one serving consumes.
+                        Use <strong>+ Link Menu Item</strong> on any card to attach or detach as many menu items as you like.
+                    </p>
                     <div id="smart-container-cards" class="smart-cards-grid"></div>
                 </div>
 
-                <!-- Sub-tab 2: EOD calculation -->
-                <div id="smart-subtab-eod" class="smart-sub-pane" style="display:none;">
-                    <div class="form-group">
-                        <label style="font-size: 0.95rem; font-weight: 700; color: var(--primary); margin-bottom: 8px;">
-                            <i class="fa-solid fa-cart-shopping"></i> Menu Items Sold This Shift:
-                        </label>
-                        <div id="smart-eod-menu-items-grid" class="eod-items-grid-scroll"></div>
+                <!-- Quick-link modal (many-to-many attach / detach) -->
+                <div id="smart-link-modal" class="modal-overlay" onclick="if(event.target===this)closeSmartLinkModal()">
+                    <div class="modal-container" style="max-width: 500px;">
+                        <div class="modal-header"><h3><i class="fa-solid fa-link"></i> Link Menu Item &rarr; Bulk Container</h3></div>
+                        <div class="modal-body">
+                        <p style="font-size:0.85rem;color:#666;margin-bottom:15px;">Define how much of this bulk container ONE serving consumes.</p>
+                        <div class="form-group">
+                            <label>Menu Item</label>
+                            <select id="smart-link-menu" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Bulk Container (Inventory Item)</label>
+                            <select id="smart-link-inventory" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Usage per serving (grams or ml)</label>
+                            <input type="number" id="smart-link-usage" class="form-control" min="0" step="0.01" placeholder="e.g. 20">
+                        </div>
+                        <div class="form-group">
+                            <label>Unit</label>
+                            <select id="smart-link-unit" class="form-control">
+                                <option value="g">grams (g)</option>
+                                <option value="ml">milliliters (ml)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Container capacity (grams/ml per whole container, e.g. coffee bag = 1000)</label>
+                            <input type="number" id="smart-link-container-qty" class="form-control" min="0" step="0.01" placeholder="e.g. 1000">
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button type="button" class="btn-action" style="flex:1;" onclick="submitSmartLink()">
+                                <i class="fa-solid fa-floppy-disk"></i> Save Recipe Link
+                            </button>
+                            <button type="button" class="btn-action" style="flex:1; background-color: var(--bronze-accent);" onclick="closeSmartLinkModal()">Cancel</button>
+                        </div>
+                        </div>
+                        <div class="modal-close-btn" onclick="closeSmartLinkModal()"><i class="fa-solid fa-xmark"></i></div>
                     </div>
-                    <button type="button" class="btn-action" onclick="previewSmartShift()" style="margin-top:15px;">
-                        <i class="fa-solid fa-eye"></i> Calculate Preview (no deduction yet)
-                    </button>
-                    <button type="button" class="btn-action smart-confirm-btn" id="smart-confirm-btn" onclick="applySmartShift()" style="display:none; margin-top:15px; background-color: var(--success, #1a7f37);">
-                        <i class="fa-solid fa-check-double"></i> Confirm &amp; Deduct Inventory
-                    </button>
-                    <div id="smart-preview-results" style="margin-top:20px;"></div>
-                </div>
-            </div>
-
-            <!-- Link/Update modal -->
-            <div id="smart-link-modal" class="modal-overlay" onclick="if(event.target===this)closeSmartLinkModal()">
-                <div class="modal-container" style="max-width: 500px;">
-                    <div class="modal-header"><h3><i class="fa-solid fa-link"></i> Link Menu Item → Bulk Container</h3></div>
-                    <div class="modal-body">
-                    <p style="font-size:0.85rem;color:#666;margin-bottom:15px;">Define how much of this bulk container ONE serving consumes.</p>
-                    <div class="form-group">
-                        <label>Menu Item</label>
-                        <select id="smart-link-menu" class="form-control"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Bulk Container (Inventory Item)</label>
-                        <select id="smart-link-inventory" class="form-control"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Usage per serving (grams or ml)</label>
-                        <input type="number" id="smart-link-usage" class="form-control" min="0" step="0.01" placeholder="e.g. 20">
-                    </div>
-                    <div class="form-group">
-                        <label>Unit</label>
-                        <select id="smart-link-unit" class="form-control">
-                            <option value="g">grams (g)</option>
-                            <option value="ml">milliliters (ml)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Container capacity (grams/ml per whole container, e.g. coffee bag = 1000)</label>
-                        <input type="number" id="smart-link-container-qty" class="form-control" min="0" step="0.01" placeholder="e.g. 1000">
-                    </div>
-                    <div style="display:flex; gap:10px; margin-top:10px;">
-                        <button type="button" class="btn-action" style="flex:1;" onclick="submitSmartLink()">
-                            <i class="fa-solid fa-floppy-disk"></i> Save Recipe Link
-                        </button>
-                        <button type="button" class="btn-action" style="flex:1; background-color: var(--bronze-accent);" onclick="closeSmartLinkModal()">Cancel</button>
-                    </div>
-                    </div>
-                    <div class="modal-close-btn" onclick="closeSmartLinkModal()"><i class="fa-solid fa-xmark"></i></div>
                 </div>
             </div>
         </section>
+
 
         <!-- ===================================================================
              OPERATIONAL LEDGERS TAB
