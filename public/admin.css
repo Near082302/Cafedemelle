@@ -1579,30 +1579,59 @@ select:focus,
     #history-vouchers-table-body td:nth-child(5)::before { content: "Redeemed Date:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #history-vouchers-table-body td:nth-child(6)::before { content: "Redeemed By:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
 
-    /* Breathable stacked layout for Master Ticket mobile view */
+    /* MASTER AUDIT TICKET mobile view — uniform with other ledger card layouts.
+       Each field keeps the standard "Label: value" row format used across the app,
+       with NO horizontal separator lines. */
     #master-ticket-content .custom-table td {
         display: flex !important;
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        padding: 10px 8px !important;
-        text-align: left !important;
-        border-bottom: 1px dashed rgba(0,0,0,0.08) !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 8px 0 !important;
+        text-align: right !important;
+        border-bottom: none !important;
     }
 
     #master-ticket-content .custom-table td::before {
         font-size: 0.75rem !important;
         font-weight: 700 !important;
         color: var(--primary) !important;
-        margin-bottom: 4px !important;
-        display: block !important;
+        margin: 0 10px 0 0 !important;
+        display: inline-block !important;
+        white-space: nowrap;
     }
 
-    #master-ticket-content td:nth-child(1)::before { content: "Item / Invoice / Type:"; }
-    #master-ticket-content td:nth-child(2)::before { content: "Unit Price / Supplier:"; }
-    #master-ticket-content td:nth-child(3)::before { content: "Qty / Item / Cost:"; }
-    #master-ticket-content td:nth-child(4)::before { content: "Qty Sold / Cost:"; }
-    #master-ticket-content td:nth-child(5)::before { content: "Subtotal / Loss:"; }
-    #master-ticket-content td:nth-child(6)::before { content: "Total Cost:"; }
+    /* Section 1 — POS itemized sales */
+    #master-ticket-content #ticket-pos-tbody td:nth-child(1)::before { content: "Menu Item:"; }
+    #master-ticket-content #ticket-pos-tbody td:nth-child(2)::before { content: "Unit Price:"; }
+    #master-ticket-content #ticket-pos-tbody td:nth-child(3)::before { content: "Qty Sold:"; }
+    #master-ticket-content #ticket-pos-tbody td:nth-child(4)::before { content: "Subtotal:"; }
+
+    /* Section 2 — Stock shipments (stock-in) */
+    #master-ticket-content #ticket-ship-tbody td:nth-child(1)::before { content: "Invoice #:"; }
+    #master-ticket-content #ticket-ship-tbody td:nth-child(2)::before { content: "Supplier:"; }
+    #master-ticket-content #ticket-ship-tbody td:nth-child(3)::before { content: "Container Item:"; }
+    #master-ticket-content #ticket-ship-tbody td:nth-child(4)::before { content: "Unit Cost:"; }
+    #master-ticket-content #ticket-ship-tbody td:nth-child(5)::before { content: "Qty Received:"; }
+    #master-ticket-content #ticket-ship-tbody td:nth-child(6)::before { content: "Total Cost:"; }
+
+    /* Section 3 — Stock-out & spillage */
+    #master-ticket-content #ticket-waste-tbody td:nth-child(1)::before { content: "Type:"; }
+    #master-ticket-content #ticket-waste-tbody td:nth-child(2)::before { content: "Item:"; }
+    #master-ticket-content #ticket-waste-tbody td:nth-child(3)::before { content: "Unit Cost:"; }
+    #master-ticket-content #ticket-waste-tbody td:nth-child(4)::before { content: "Qty Lost:"; }
+    #master-ticket-content #ticket-waste-tbody td:nth-child(5)::before { content: "Financial Loss:"; }
+
+    /* Kill every stray horizontal rule inside the ticket on mobile */
+    #master-ticket-content br { display: none; }
+    #master-ticket-modal .modal-body hr { display: none; }
+    #master-ticket-print-area > div:first-child {
+        border-bottom: none !important;
+        padding-bottom: 0 !important;
+    }
+    #master-ticket-content > .ticket-section-card > div {
+        overflow-x: hidden !important;
+    }
 
     #active-vouchers-table-body td:nth-child(1)::before { content: "Voucher Code:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #active-vouchers-table-body td:nth-child(2)::before { content: "Customer Name:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
@@ -1990,4 +2019,12 @@ select:focus,
 @media (max-width: 768px) {
     .smart-cards-grid { grid-template-columns: 1fr; }
     .eod-stepper input { width: 58px !important; }
+}
+
+/* PART 3: +/- steppers are a touch-screen convenience — hidden on desktop (PC taps
+   numbers straight into the field), kept visible on mobile for fast tapping */
+.eod-stepper-btn { display: none; }
+
+@media (max-width: 768px) {
+    .eod-stepper-btn { display: inline-flex; }
 }

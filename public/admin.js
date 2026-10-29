@@ -764,11 +764,24 @@ function renderEodMenuGrid(items) {
     const activeItems = (items || []).filter(item => item.is_available !== 0);
 
     if (!activeItems || activeItems.length === 0) {
+        // Always (re)paint the empty state — nothing scrollable here, no jump risk
         grid.innerHTML = '<div style="color:#888; grid-column: 1/-1; padding: 15px; text-align: center;">No active menu items available to log.</div>';
         return;
     }
 
-    // GUARD 2: Preserve any values already entered before re-rendering
+    // GUARD 2: if the active item set hasn't changed, leave the DOM alone. Rebuilding on
+    // every background poll reset the grid's scroll position and made data entry jump.
+    const activeIds = activeItems.map(i => String(i.id)).join(',');
+    const existingIds = [...grid.querySelectorAll('.eod-item-qty')].map(inp => inp.dataset.menuId).join(',');
+    if (activeIds === existingIds) {
+        return;
+    }
+
+    // GUARD 3: remember where the operator was scrolled before rebuilding so the
+    // submission flow never visually jumps back to the top mid-entry.
+    const prevScrollTop = grid.scrollTop;
+
+    // Preserve any values already entered before re-rendering
     const existingValues = {};
     document.querySelectorAll('.eod-item-qty').forEach(input => {
         const menuId = input.dataset.menuId;
@@ -800,6 +813,9 @@ function renderEodMenuGrid(items) {
     // Re-apply any active search or category filters
     filterEodMenuGrid();
     updateEodLiveTally();
+
+    // Restore the operator's scroll position after the rebuild
+    grid.scrollTop = prevScrollTop;
 }
 
 // Numeric stepper for "Units Sold Today" entries
@@ -981,7 +997,7 @@ function openMasterTicketModal() {
 
     Promise.all([
         fetch(`/api/admin/closeouts?start_date=${shiftDate}&end_date=${shiftDate}`).then(res => res.json()),
-        fetch(`/api/admin/invoices?date=${shiftDate}`).then(res => res.json()),
+        fetch(`/api/admin/invoices?start_date=${shiftDate}&end_date=${shiftDate}`).then(res => res.json()),
         fetch(`/api/admin/wastage?start_date=${shiftDate}&end_date=${shiftDate}`).then(res => res.json())
     ])
     .then(async ([closeouts, shipments, wastage]) => {
@@ -1085,7 +1101,7 @@ function openMasterTicketModal() {
                                 <th style="text-align:right;">Subtotal</th>
                             </tr>
                         </thead>
-                        <tbody>${posRowsHtml}</tbody>
+                        <tbody id="ticket-pos-tbody" data-label-section="pos">${posRowsHtml}</tbody>
                     </table>
                 </div>
                 <div class="ticket-receipt-summary" style="text-align: right;">
@@ -1111,7 +1127,7 @@ function openMasterTicketModal() {
                                 <th style="text-align:right;">Total Cost</th>
                             </tr>
                         </thead>
-                        <tbody>${shipHtml}</tbody>
+                        <tbody id="ticket-ship-tbody" data-label-section="shipments">${shipHtml}</tbody>
                     </table>
                 </div>
                 ${shipments && shipments.length > 0 ? `
@@ -1137,7 +1153,7 @@ function openMasterTicketModal() {
                                 <th style="text-align:right;">Financial Loss</th>
                             </tr>
                         </thead>
-                        <tbody>${wasteHtml}</tbody>
+                        <tbody id="ticket-waste-tbody" data-label-section="wastage">${wasteHtml}</tbody>
                     </table>
                 </div>
                 ${wastage && wastage.length > 0 ? `

@@ -1550,7 +1550,7 @@ app.post('/api/admin/inventory/close-shift', requireAuth, (req, res) => {
 });
 
 app.get('/api/admin/invoices', requireAuth, (req, res) => {
-    const { start_date, end_date, supplier } = req.query;
+    const { start_date, end_date, date, supplier } = req.query;
     let query = `
         SELECT s.*, i.item_name
         FROM stock_shipments s
@@ -1559,6 +1559,12 @@ app.get('/api/admin/invoices', requireAuth, (req, res) => {
     `;
     const params = [];
 
+    // `date` is an exact-day filter (used by the Daily Master Audit Ticket) so the
+    // ticket only sums shipments RECEIVED on the audited shift — never all history.
+    if (date) {
+        query += ` AND DATE(s.timestamp) = DATE(?)`;
+        params.push(date);
+    }
     if (start_date) {
         query += ` AND DATE(s.timestamp) >= DATE(?)`;
         params.push(start_date);
