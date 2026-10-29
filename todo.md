@@ -3,7 +3,7 @@
 Status: GREEN (main / live on Render) = 100% working. Never touched by new work.
 All new work happens on the `dev` branch = BLUE.
 
-
+---
 
 ## PART 1 — Blue/Green Deployment (Render)
 
@@ -25,7 +25,7 @@ All new work happens on the `dev` branch = BLUE.
 
 ## PART 2 — Ultra Smart Inventory Tracker & Unified EOD Workflow
 
-Goal: Support true Many-to-Many relationships between bulk containers and menu items, and unify EOD shift financial logging with automated inventory usage calculations into a single seamless screen.
+Goal: Support true Many-to-Many relationships between bulk containers and menu items, unify EOD shift financial logging with automated inventory usage calculations, and establish a stress-free operational balance between automation and real-world variance.
 
 ### 2.1 Database & Schema Adjustments (Many-to-Many)
 - [x] `recipe_links`: id, menu_item_id, inventory_item_id, usage_amount, usage_unit ('g'|'ml'), container_quantity (g/ml per whole container), unique(menu_item_id, inventory_item_id)
@@ -43,21 +43,33 @@ Goal: Support true Many-to-Many relationships between bulk containers and menu i
   - **Top Section**: Shift date picker, Total POS Sales (₱) input, and Shift Discounts Deducted (₱) input.
   - **Middle Section**: Searchable + category-filtered grid of ACTIVE menu items with numeric ± steppers for "Units Sold Today" and a live tally bar (gross/net instant).
   - **Bottom Section (Preview Drawer)**: **"Calculate Usage & Preview Deduction"** reveals a per-container breakdown (total used from which items, opening remainder, whole containers deducted, stock before→after, ending remainder) plus the financial tally before final submission.
-      - Example Preview view (as implemented):
-        ```text
-        📦 Nestle Coffee Bag
-           • Sold this shift: 20 (from Iced Americano x20)
-           • Total Used: 600 g · Opening Remainder: 200 g
-           • Whole Containers Deducted: 3 (Stock: 12 → 9)
-           • Ending Remainder in Open Container: 50 g
-        ```
   - **Final Action**: **"Confirm Closeout & Deduct Inventory"** (security-gated) hits `POST /api/admin/inventory/unified-closeout`, which in ONE SQLite transaction saves: `shift_closeouts` (financial), `shift_closeout_items` (itemized sales), inventory stock deductions, `usage_logs` remainder rollovers, and all-recipe-links kill-switches. Any step failing rolls back everything.
 - [x] Legacy `POST /api/admin/inventory/close-shift` kept for compatibility: still stores financials/itemized rows, no longer does the old single-link unit deduction (smart engine owns deductions now).
 
-### 2.4 Testing Checklist (Blue only)
+### 2.4 Phase 3: Stress-Free Operational Design & Real-World Variance Rules
+*Philosophy: Avoid corporate micro-management (like StoreHub/Jollibee IMS) by separating physical reality from theoretical math.*
+- [x] **Two-Tier Counting Rule (Enforced Policy)**:
+  - Staff *never* counts grams or milliliters physically on the shelf during audits.
+  - Staff only counts **whole, unopened units** physically. Open active containers are handled digitally via background remainder tracking.
+  - *Implemented on dev (blue)*: two-tier policy note enforced in the Shift Evening Audit form; live "System Expectation" hint appears when a container is picked (`POST /api/admin/inventory/audit/preview` expectation-only mode shows whole unopened containers + the digital opened-remainder, and explicitly tells staff not to weigh).
+- [x] **Explicit Waste vs. Operational Variance Separation**:
+  - **Explicit Waste (Log Spillage / Wastage Tab)**: Strict tracking for items physically destroyed or thrown away and *never* touching a customer (e.g., shattered syrup bottles, expired milk in the fridge).
+  - **Operational Variance (Shift Evening Audit Reconciliation)**: When physical shelf counts differ slightly from smart calculations due to rush-hour heavy pours, customer customizations (extra pump of syrup), or barista tastings, the system **does not auto-punish or log false wastage**.
+  - *Implemented on dev (blue)*: soft-reconciliation path (`reason_code` on the audit endpoint) writes to a new `audit_variances` ledger with ZERO `wastage_logs` entries and ₱0 financial punishment; legacy no-reason-code path kept untouched for compatibility; new "Variance (Evening Audit)" filter pill + badge in the Stock-Out & Spillage ledger (exports included).
+- [x] **Soft Audit Reconciliation Modal / Prompt**:
+  - During the **Shift Evening Audit**, if a discrepancy is found between physical count and system calculation, present a gentle prompt with a non-scary **Reason Code Dropdown**:
+    - `[Customer Customization / Extra Serving]`
+    - `[Barista Heavy Pour / Shift Variance]`
+    - `[Staff Tasting / Quality Check]`
+    - `[Unrecorded Loss / Shrinkage]`
+  - Hitting "Reconcile & Reset" silently updates the base inventory to match reality, logs the variance for managerial transparency, and keeps operations flowing smoothly without barista stress.
+  - *Implemented on dev (blue)*: submitting the audit first previews the discrepancy; if counts match → clean closure with no punishment; if mismatched → gentle "Small Mismatch Found — No Worries" modal with the reason code dropdown, and "Reconcile & Reset" snaps base stock to shelf reality.
+
+### 2.5 Testing Checklist (Blue only)
 - [x] Register a single bulk container and link multiple menu items to it (verified locally on dev: container linked to 2 menu items, one menu item linked to 2 containers — true many-to-many).
-- [x] Verify usage math: 20 Americanos × 20 g = 400 g + 5 lattes × 20 g = 500 g → correct whole containers/remainder; also verified via a live run on a 250 g bag (600 g → 3 whole + 50 g remainder, stock 12 → 9). *(Re-test on Render blue after push.)*
-- [x] Test remainder carry-over between shifts (previous run's remainder feeds the next preview as Opening Remainder, and shows on the container card). *(Re-test on Render blue after push.)*
+- [x] Verify usage math: 20 Americanos × 20 g = 400 g + 5 lattes × 20 g = 500 g → correct whole containers/remainder; also verified via a live run on a 250 g bag (600 g → 3 whole + 50 g remainder, stock 12 → 9).
+- [x] Test remainder carry-over between shifts.
 - [x] Ensure menu items with no recipe links display safe warnings during preview without blocking the transaction (NO_RECIPE_LINK warning shown, sale still saved, nothing deducted).
-- [x] Verify existing tables (shipments, audit, waste, pos-sync) remain untouched and fully operational (only kill-switch paths were rebased onto `recipe_links`; closeout history ledger + master audit ticket still work).
+- [x] Verify existing tables (shipments, audit, waste, pos-sync) remain untouched and fully operational.
+- [x] Soft audit reconciliation + variance reason codes verified locally on dev: preview endpoint, gentle modal flow, `audit_variances` ledger row, zero false `wastage_logs` entries on reconcile, legacy `EVENING_AUDIT_STOCKOUT` path still intact, variance filter pill + CSV export working. (Remaining: red-team during real evening shifts on blue.)
 - [ ] Once stable on blue → merge `dev` → `main` and deploy green.

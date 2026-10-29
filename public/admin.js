@@ -1237,6 +1237,13 @@ function submitStockIn(e) {
     });
 }
 
+/* ===========================================================================
+   PHASE 3: SOFT AUDIT RECONCILIATION (Two-Tier Counting + Reason Codes)
+   =========================================================================== */
+// Two-tier soft audit: preview the discrepancy first. If the physical whole-unopened
+// count differs from the system calculation, open the gentle reconciliation modal with
+// a non-scary reason code dropdown. "Reconcile & Reset" silently snaps base inventory
+// to shelf reality — operational variance is NEVER auto-logged as false wastage.
 function submitEveningAudit(e) {
     e.preventDefault();
     const itemId = document.getElementById('audit-inventory-id').value;
@@ -1244,28 +1251,169 @@ function submitEveningAudit(e) {
     const actualStock = parseInt(document.getElementById('audit-actual-stock').value, 10) || 0;
     const notes = document.getElementById('audit-notes').value.trim();
 
+    if (!itemId) {
+        showToast('Please select a container first.', 'error');
+        return;
+    }
+
+    fetch('/api/admin/inventory/audit/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventory_item_id: itemId, actual_stock: actualStock })
+    })
+    .then(res => res.json())
+    .then(preview => {
+        if (!preview.success) {
+            showToast(preview.error || 'Failed to preview audit.', 'error');
+            return;
+        }
+
+        if (preview.has_variance) {
+            openAuditReconcileModal({ inventory_item_id: itemId, shift_period: shift, actual_stock: actualStock, notes: notes, preview: preview });
+        } else {
+            // Counts match — clean closure, no reason code needed, no deductions/punishment
+            fetch('/api/admin/inventory/audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inventory_item_id: itemId, shift_period: shift, actual_stock: actualStock, notes: notes })
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    showToast('Shift audit saved! Counts match — clean closure.');
+                    resetAuditForm();
+                } else {
+                    showToast(res.error || 'Failed to submit audit.', 'error');
+                }
+            });
+        }
+    })
+    .catch(err => {
+        console.error('Audit preview error:', err);
+        showToast('Audit preview failed. Check your connection.', 'error');
+    });
+}
+
+function openAuditReconcileModal(payload) {
+    window._pendingAuditPayload = payload;
+
+    const box = document.getElementById('reconcile-discrepancy-box');
+    if (box) {
+        const p = payload.preview;
+        const diff = p.variance;
+        const diffText = diff > 0 ? `+${diff}` : `${diff}`;
+        box.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <div><strong><i class="fa-solid fa-box-open"></i> Container:</strong> ${escapeHtml(p.item_name)}</div>
+                <div><strong><i class="fa-solid fa-scale-balanced"></i> System Calculated:</strong> ${p.system_expected} whole unopened container(s)
+                    <span style="color:#666;">— plus ${p.opened_remainder}${p.opened_remainder_unit} in the opened container (tracked digitally)</span></div>
+                <div><strong><i class="fa-solid fa-hand-pointer"></i> Physically Counted:</strong> ${payload.actual_stock} whole unopened container(s)</div>
+                <div><strong><i class="fa-solid fa-code-branch"></i> Difference:</strong> <span style="color:${diff < 0 ? '#b71c1c' : '#2e7d32'}; font-weight:700;">${diffText} container(s)</span></div>
+            </div>`;
+    }
+
+    // Reset any previous reason selection
+    const reasonInput = document.getElementById('audit-variance-reason');
+    if (reasonInput) reasonInput.value = '';
+    const dropdown = document.getElementById('audit-variance-reason-dropdown');
+    if (dropdown) {
+        const span = dropdown.querySelector('.dropdown-selected-text');
+        if (span) span.textContent = '-- Choose a Reason Code --';
+        dropdown.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('active'));
+    }
+
+    const modal = document.getElementById('audit-reconcile-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeAuditReconcileModal() {
+    window._pendingAuditPayload = null;
+    const modal = document.getElementById('audit-reconcile-modal');
+    if (modal) modal.classList.remove('active');
+    // Clear the reason selection so a later modal opening never carries stale state
+    const reasonInput = document.getElementById('audit-variance-reason');
+    if (reasonInput) reasonInput.value = '';
+}
+
+function selectAuditVarianceReason(optionEl, value) {
+    selectCustomOption(optionEl, value, 'audit-variance-reason');
+}
+
+function confirmSoftReconcile() {
+    const payload = window._pendingAuditPayload;
+    if (!payload) {
+        closeAuditReconcileModal();
+        return;
+    }
+
+    const reason = document.getElementById('audit-variance-reason').value;
+    if (!reason) {
+        showToast('Please pick a reason code first — or hit Cancel to leave things as they are.', 'warning');
+        return;
+    }
+
     fetch('/api/admin/inventory/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            inventory_item_id: itemId,
-            shift_period: shift,
-            actual_stock: actualStock,
-            notes: notes
+            inventory_item_id: payload.inventory_item_id,
+            shift_period: payload.shift_period,
+            actual_stock: payload.actual_stock,
+            notes: payload.notes,
+            reason_code: reason
         })
     })
     .then(res => res.json())
     .then(res => {
+        closeAuditReconcileModal();
         if (res.success) {
-            showToast(`Shift audit saved! Variance: ${res.variance}`);
-            document.getElementById('form-ops-audit').reset();
-            loadInventoryItems();
-            loadDashboardData();
-            loadWastageLogs();
+            showToast('Inventory reconciled to match shelf reality. All good — nothing logged as wastage!');
+            resetAuditForm();
         } else {
-            showToast(res.error || 'Failed to submit audit.', 'error');
+            showToast(res.error || 'Failed to reconcile inventory.', 'error');
         }
     });
+}
+
+function resetAuditForm() {
+    const form = document.getElementById('form-ops-audit');
+    if (form) form.reset();
+    loadAuditExpectation(null);
+    loadInventoryItems();
+    loadDashboardData();
+    loadWastageLogs();
+}
+
+// PHASE 3: Live "System Expectation" hint while auditing — shows the digital view of the
+// shelf (whole unopened containers + the opened container's remainder) with NO counting
+// stress. Fired whenever a container is picked in the audit dropdown.
+function loadAuditExpectation(itemId) {
+    const box = document.getElementById('audit-system-expectation');
+    if (!box) return;
+
+    if (!itemId) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    fetch('/api/admin/inventory/audit/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventory_item_id: itemId })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (!res.success) {
+            box.style.display = 'none';
+            return;
+        }
+        box.style.display = 'block';
+        box.innerHTML = `<strong><i class="fa-solid fa-scale-balanced"></i> System Expectation:</strong>
+            ${res.system_expected} whole unopened container(s) on the shelf.
+            <span style="color:#666;">The opened container still holds ~${res.opened_remainder}${res.opened_remainder_unit} — tracked digitally, <strong>never weighed or counted physically</strong>.</span>`;
+    })
+    .catch(() => { box.style.display = 'none'; });
 }
 
 function submitWastageLog(e) {
@@ -1396,6 +1544,21 @@ function loadWastageLogs() {
     const endDate = document.getElementById('spillage-end-date')?.value;
     const typeFilter = document.getElementById('spillage-type-filter')?.value || 'ALL';
 
+    // PHASE 3: VARIANCE ledger lives in audit_variances (soft reconciliations), NOT wastage.
+    if (typeFilter === 'VARIANCE') {
+        let vUrl = '/api/admin/inventory/audit-variances?';
+        if (startDate) vUrl += `start_date=${encodeURIComponent(startDate)}&`;
+        if (endDate) vUrl += `end_date=${encodeURIComponent(endDate)}&`;
+
+        return fetch(vUrl)
+            .then(res => res.json())
+            .then(data => renderWastageTable(Array.isArray(data) ? data : []))
+            .catch(err => {
+                console.error('Error loading variance logs:', err);
+                renderWastageError();
+            });
+    }
+
     let url = '/api/admin/wastage?';
     if (startDate) url += `start_date=${encodeURIComponent(startDate)}&`;
     if (endDate) url += `end_date=${encodeURIComponent(endDate)}&`;
@@ -1407,48 +1570,53 @@ function loadWastageLogs() {
             return res.json();
         })
         .then(data => {
-            const tbody = document.getElementById('spillage-table-body');
-            if (!tbody) return;
-
-            if (!Array.isArray(data)) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--danger); padding:15px;">Invalid response data received from server.</td></tr>';
-                return;
-            }
-
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#888; padding:15px;">No stock-out or spillage logs recorded.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = data.map(w => {
-                let badgeHtml = '';
-                if (w.movement_type === 'AUDIT') {
-                    badgeHtml = `<span class="badge-audit-green"><i class="fa-solid fa-clipboard-check"></i> SHIFT AUDIT</span>`;
-                } else {
-                    badgeHtml = `<span class="badge-audit-red"><i class="fa-solid fa-dumpster-fire"></i> SPILLAGE</span>`;
-                }
-
-                return `
-                    <tr>
-                        <td>${w.id}</td>
-                        <td><strong>${badgeHtml} ${escapeHtml(w.item_name)}</strong></td>
-                        <td>${escapeHtml(w.quantity_display)}</td>
-                        <td>${escapeHtml(w.reason_code)}</td>
-                        <td>₱${(w.unit_cost || 0).toFixed(2)}</td>
-                        <td>₱${(w.financial_loss || 0).toFixed(2)}</td>
-                        <td>${escapeHtml(w.logged_by)}</td>
-                        <td>${new Date(w.timestamp).toLocaleString()}</td>
-                    </tr>
-                `;
-            }).join('');
+            renderWastageTable(Array.isArray(data) ? data : []);
         })
         .catch(err => {
             console.error('Error loading wastage logs:', err);
-            const tbody = document.getElementById('spillage-table-body');
-            if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--danger); padding:15px;">Error loading stock-out history logs.</td></tr>';
-            }
+            renderWastageError();
         });
+}
+
+function renderWastageError() {
+    const tbody = document.getElementById('spillage-table-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--danger); padding:15px;">Error loading stock-out history logs.</td></tr>';
+    }
+}
+
+function renderWastageTable(data) {
+    const tbody = document.getElementById('spillage-table-body');
+    if (!tbody) return;
+
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#888; padding:15px;">No stock-out, spillage, or variance logs recorded.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.map(w => {
+        let badgeHtml = '';
+        if (w.movement_type === 'AUDIT') {
+            badgeHtml = `<span class="badge-audit-green"><i class="fa-solid fa-clipboard-check"></i> SHIFT AUDIT</span>`;
+        } else if (w.movement_type === 'VARIANCE') {
+            badgeHtml = `<span class="badge-audit-blue"><i class="fa-solid fa-scale-balanced"></i> VARIANCE</span>`;
+        } else {
+            badgeHtml = `<span class="badge-audit-red"><i class="fa-solid fa-dumpster-fire"></i> SPILLAGE</span>`;
+        }
+
+        return `
+            <tr>
+                <td>${w.id}</td>
+                <td><strong>${badgeHtml} ${escapeHtml(w.item_name)}</strong></td>
+                <td>${escapeHtml(w.quantity_display)}</td>
+                <td>${escapeHtml(w.reason_label || w.reason_code)}</td>
+                <td>₱${(w.unit_cost || 0).toFixed(2)}</td>
+                <td>${w.movement_type === 'VARIANCE' ? '—' : '₱' + (w.financial_loss || 0).toFixed(2)}</td>
+                <td>${escapeHtml(w.logged_by)}</td>
+                <td>${new Date(w.timestamp).toLocaleString()}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function loadCloseoutHistory() {
@@ -1540,17 +1708,17 @@ function exportLedgerCSV(type) {
         const endDate = document.getElementById('spillage-end-date')?.value;
         const typeFilter = document.getElementById('spillage-type-filter')?.value || 'ALL';
 
-        let url = '/api/admin/wastage?';
+        let url = (typeFilter === 'VARIANCE') ? '/api/admin/inventory/audit-variances?' : '/api/admin/wastage?';
         if (startDate) url += `start_date=${encodeURIComponent(startDate)}&`;
         if (endDate) url += `end_date=${encodeURIComponent(endDate)}&`;
-        url += `movement_type=${encodeURIComponent(typeFilter)}`;
+        if (typeFilter !== 'VARIANCE') url += `movement_type=${encodeURIComponent(typeFilter)}`;
 
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 let csv = 'ID,Movement Type,Container Item/Details,Quantity/Notes,Reason Code,Unit Cost,Financial Loss,Logged By,Timestamp\n';
                 (data || []).forEach(w => {
-                    csv += `${w.id},"${w.movement_type}","${escapeHtml(w.item_name)}","${escapeHtml(w.quantity_display)}","${w.reason_code}",${w.unit_cost},${w.financial_loss},"${w.logged_by}","${w.timestamp}"\n`;
+                    csv += `${w.id},"${w.movement_type}","${escapeHtml(w.item_name)}","${escapeHtml(w.quantity_display)}","${escapeHtml(w.reason_label || w.reason_code)}",${w.unit_cost || 0},${w.financial_loss || 0},"${w.logged_by}","${w.timestamp}"\n`;
                 });
                 downloadCSV(csv, 'stockout_spillage_audit_history.csv');
             });
@@ -2223,6 +2391,10 @@ function populateDynamicContainerDropdowns(containers) {
             opt.textContent = `${item.item_name || item.name} (Current: ${item.stock_quantity ?? item.quantity} ${item.container_unit || item.unit})`;
             opt.onclick = function() {
                 selectCustomOption(this, item.id, target.hiddenId);
+                // PHASE 3: show the live system expectation (two-tier counting) when auditing
+                if (target.hiddenId === 'audit-inventory-id' && typeof loadAuditExpectation === 'function') {
+                    loadAuditExpectation(item.id);
+                }
             };
             menuEl.appendChild(opt);
         });

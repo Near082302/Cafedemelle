@@ -118,6 +118,20 @@ button[onclick*="delete"]:hover,
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
+.badge-audit-blue {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #90caf9;
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
 .badge-audit-red, .status-low-stock {
     background-color: var(--audit-red-bg);
     color: var(--audit-red);
@@ -1600,6 +1614,7 @@ select:focus,
     .custom-table td button,
     .custom-table td .badge-audit-green,
     .custom-table td .badge-audit-red,
+    .custom-table td .badge-audit-blue,
     .custom-table td .status-stable,
     .custom-table td .badge-protected {
         max-width: 100% !important;

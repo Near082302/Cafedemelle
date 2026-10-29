@@ -432,6 +432,23 @@ function initDatabaseSchema() {
             UNIQUE(menu_item_id, inventory_item_id)
         )`);
 
+        // PHASE 3 SOFT AUDIT RECONCILIATION: real-world variance log (managerial transparency,
+        // never a punishment row). Explicit wastage stays in wastage_logs; these are shelf counts
+        // that drifted slightly from the smart calculation during normal operations.
+        db.run(`CREATE TABLE IF NOT EXISTS audit_variances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_item_id INTEGER NOT NULL,
+            item_name TEXT,
+            shift_period TEXT,
+            system_expected INTEGER NOT NULL,
+            physical_count INTEGER NOT NULL,
+            variance INTEGER NOT NULL,
+            reason_code TEXT NOT NULL,
+            notes TEXT,
+            logged_by TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
         // SMART INVENTORY TRACKER: computed end-of-day usage deductions
         db.run(`CREATE TABLE IF NOT EXISTS usage_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1259,21 +1276,132 @@ app.post('/api/admin/inventory/shipment', requireAuth, (req, res) => {
     );
 });
 
+// PHASE 3 — SOFT AUDIT RECONCILIATION: non-scary, non-punitive reason codes for shelf
+// counts that drifted slightly from the smart calculation. Separate from the strict
+// Wastage Tab (which is for physically destroyed/never-sold stock only).
+const AUDIT_VARIANCE_REASONS = {
+    CUSTOMER_CUSTOMIZATION: 'Customer Customization / Extra Serving',
+    HEAVY_POUR: 'Barista Heavy Pour / Shift Variance',
+    STAFF_TASTING: 'Staff Tasting / Quality Check',
+    SHRINKAGE: 'Unrecorded Loss / Shrinkage'
+};
+
+// PHASE 3 — TWO-TIER COUNTING PREVIEW: compare the staff's physical count of WHOLE
+// UNOPENED containers against the system expectation. The currently open container
+// is tracked digitally via usage_logs remainder and is NEVER physically counted or
+// weighed — staff never touch grams/milliliters during audits.
+// Call without actual_stock to get the expectation hint only (no discrepancy check).
+app.post('/api/admin/inventory/audit/preview', requireAuth, (req, res) => {
+    const { inventory_item_id, actual_stock } = req.body;
+
+    if (!inventory_item_id) {
+        return res.status(400).json({ success: false, error: 'Target container is required.' });
+    }
+
+    db.get(`SELECT id, item_name, stock_quantity, container_unit, item_cost FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
+        if (!inv) return res.status(404).json({ success: false, error: 'Inventory container item not found.' });
+
+        // Last persisted remainder = grams/ml sitting in the currently opened container
+        db.get(`
+            SELECT u.remainder, u.usage_unit
+            FROM usage_logs u
+            INNER JOIN (
+                SELECT inventory_item_id, MAX(id) AS last_id FROM usage_logs GROUP BY inventory_item_id
+            ) last ON last.last_id = u.id
+            WHERE u.inventory_item_id = ?
+        `, [inventory_item_id], (err2, opened) => {
+            if (err2) return res.status(500).json({ success: false, error: err2.message });
+
+            const systemExpected = Math.floor(inv.stock_quantity);
+            const openedRemainder = opened ? Math.round(opened.remainder * 100) / 100 : 0;
+            const openedUnit = opened ? (opened.usage_unit || inv.container_unit) : inv.container_unit;
+
+            let variance = null, hasVariance = false, countedStock = null;
+            if (actual_stock !== undefined && actual_stock !== null && actual_stock !== '') {
+                countedStock = parseInt(actual_stock, 10) || 0;
+                variance = countedStock - systemExpected;
+                hasVariance = variance !== 0;
+            }
+
+            res.json({
+                success: true,
+                inventory_item_id: inv.id,
+                item_name: inv.item_name,
+                counting_policy: 'TWO_TIER',
+                system_expected: systemExpected,
+                opened_remainder: openedRemainder,
+                opened_remainder_unit: openedUnit,
+                counting_policy_text: `Count ONLY whole, unopened containers. The opened container still holds ${openedRemainder}${openedUnit} — tracked digitally, never weighed.`,
+                counted_stock: countedStock,
+                system_expected_unit: 'whole unopened container(s)',
+                variance,
+                has_variance: hasVariance
+            });
+        });
+    });
+});
+
 app.post('/api/admin/inventory/audit', requireAuth, (req, res) => {
-    const { inventory_item_id, shift_period, actual_stock, notes } = req.body;
+    const { inventory_item_id, shift_period, actual_stock, notes, reason_code } = req.body;
     const performer = getActiveUser(req);
 
     if (!inventory_item_id || actual_stock === undefined) {
         return res.status(400).json({ success: false, error: 'Target container and actual physical stock count are required.' });
     }
 
-    const newStockQty = parseInt(actual_stock, 10) || 0;
+    // PHASE 3: a reason code = Soft Reconcile & Reset path. Reject unknown codes so bad
+    // clients can never silently fall back into legacy false-wastage logging.
+    if (reason_code !== undefined && reason_code !== null && reason_code !== '' && !AUDIT_VARIANCE_REASONS[reason_code]) {
+        return res.status(400).json({
+            success: false,
+            error: `Invalid variance reason code '${reason_code}'. Valid: ${Object.keys(AUDIT_VARIANCE_REASONS).join(', ')}.`
+        });
+    }
+
+    const newStockQty = Math.max(0, parseInt(actual_stock, 10) || 0);
 
     db.get(`SELECT item_name, stock_quantity, item_cost FROM inventory_items WHERE id = ?`, [inventory_item_id], (err, inv) => {
         if (!inv) return res.status(404).json({ success: false, error: 'Inventory container item not found.' });
 
         const variance = newStockQty - inv.stock_quantity;
 
+        // PHASE 3 SOFT RECONCILIATION: chose a variance reason code → this is operational
+        // variance, NOT wastage. Stock is silently updated to match shelf reality and the
+        // variance is logged for managerial transparency. NO wastage_logs entry, NO
+        // financial punishment — operations keep flowing smoothly without barista stress.
+        if (reason_code) {
+            const reasonLabel = AUDIT_VARIANCE_REASONS[reason_code];
+            db.run(
+                `UPDATE inventory_items SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                [newStockQty, inventory_item_id],
+                function(err) {
+                    if (err) return res.status(500).json({ success: false, error: err.message });
+
+                    if (newStockQty <= 0) {
+                        // Many-to-Many kill-switch: reality check that it is truly gone
+                        db.run(`UPDATE menu_items SET is_available = 0 WHERE id IN (SELECT DISTINCT menu_item_id FROM recipe_links WHERE inventory_item_id = ?)`, [inventory_item_id]);
+                        touchMenuUpdateTimestamp();
+                        logAudit('MENU_KILL_SWITCH', `Automated kill-switch toggled ALL linked menu items OFF due to ZERO inventory of '${inv.item_name}'`, 'System Guard');
+                    }
+
+                    if (variance !== 0) {
+                        db.run(
+                            `INSERT INTO audit_variances (inventory_item_id, item_name, shift_period, system_expected, physical_count, variance, reason_code, notes, logged_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [inventory_item_id, inv.item_name, shift_period || 'Closing', inv.stock_quantity, newStockQty, variance, reason_code, notes || null, performer]
+                        );
+                        logAudit('EVENING_AUDIT_VARIANCE', `Soft Reconcile (${shift_period || 'Closing'}): '${inv.item_name}' system ${inv.stock_quantity} vs physical ${newStockQty} (Variance: ${variance >= 0 ? '+' : ''}${variance}) → Reason: ${reasonLabel}. Base inventory silently reset to match reality. No wastage logged. Notes: ${notes || 'None'}`, performer);
+                    } else {
+                        logAudit('EVENING_AUDIT', `Shift Audit (${shift_period || 'Closing'}): '${inv.item_name}' physical count matches system (${newStockQty}). Clean closure. Notes: ${notes || 'None'}`, performer);
+                    }
+
+                    res.json({ success: true, variance, reconciled: true, reason_code, reason_label: reasonLabel, financial_loss: 0 });
+                }
+            );
+            return;
+        }
+
+        // LEGACY PATH (kept for backwards compatibility when no reason code is supplied):
+        // plain audit save — negative variance still books EVENING_AUDIT_STOCKOUT wastage.
         db.run(
             `UPDATE inventory_items SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
             [newStockQty, inventory_item_id],
@@ -1500,6 +1628,53 @@ app.get('/api/admin/wastage', requireAuth, (req, res) => {
                 timestamp: w.timestamp
             };
         });
+
+        res.json(formatted);
+    });
+});
+
+// PHASE 3: Variance ledger for managerial transparency — soft reconciliation history
+// (never merged into wastage; operational variance is deliberately NOT financial loss).
+app.get('/api/admin/inventory/audit-variances', requireAuth, (req, res) => {
+    const { start_date, end_date } = req.query;
+
+    let query = `
+        SELECT v.id, v.inventory_item_id, i.item_name, v.shift_period,
+               v.system_expected, v.physical_count, v.variance, v.reason_code, v.notes, v.logged_by, v.timestamp
+        FROM audit_variances v
+        LEFT JOIN inventory_items i ON i.id = v.inventory_item_id
+        WHERE 1=1
+    `;
+    const params = [];
+
+    if (start_date) {
+        query += ` AND DATE(v.timestamp) >= DATE(?)`;
+        params.push(start_date);
+    }
+    if (end_date) {
+        query += ` AND DATE(v.timestamp) <= DATE(?)`;
+        params.push(end_date);
+    }
+    query += ` ORDER BY v.timestamp DESC`;
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const formatted = rows.map(v => ({
+            id: `V-${v.id}`,
+            movement_type: 'VARIANCE',
+            item_name: v.item_name || 'Unknown Container',
+            shift_period: v.shift_period,
+            quantity_display: `${v.variance >= 0 ? '+' : ''}${v.variance} units (system ${v.system_expected} vs physical ${v.physical_count})`,
+            quantity_val: v.variance,
+            reason_code: v.reason_code,
+            reason_label: AUDIT_VARIANCE_REASONS[v.reason_code] || v.reason_code,
+            unit_cost: 0,
+            financial_loss: 0,
+            notes: v.notes || '',
+            logged_by: v.logged_by,
+            timestamp: v.timestamp
+        }));
 
         res.json(formatted);
     });

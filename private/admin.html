@@ -409,6 +409,14 @@
 
                 <div id="ops-form-audit" class="ops-form-wrapper panel-card" style="display:none;">
                     <h2><i class="fa-solid fa-clipboard-check"></i> End of Shift Evening Audit</h2>
+                    <!-- PHASE 3: Two-Tier Counting Rule (Enforced Policy) -->
+                    <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:0.88rem; color:#2e7d32; line-height:1.45;">
+                        <strong><i class="fa-solid fa-layer-group"></i> Two-Tier Counting Rule:</strong>
+                        Count ONLY the <strong>whole, unopened containers</strong> on the shelf.
+                        <strong>Never count or weigh grams/ml</strong> — the currently opened container is tracked
+                        automatically by the system, so there is nothing physical for you to measure.
+                    </div>
+                    <div id="audit-system-expectation" style="display:none; background:#f0f4ff; border:1px solid #c5cae9; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:0.88rem; line-height:1.45;"></div>
                     <form id="form-ops-audit" onsubmit="submitEveningAudit(event)">
                         <div class="form-group">
     <label>Target Container Item:</label>
@@ -432,8 +440,9 @@
     <input type="hidden" id="audit-shift" value="Closing">
 </div>
                         <div class="form-group">
-                            <label>Physically Counted Stock:</label>
-                            <input type="number" id="audit-actual-stock" required min="0" placeholder="e.g., 14">
+                            <label>Whole Unopened Containers Counted:</label>
+                            <input type="number" id="audit-actual-stock" required min="0" placeholder="e.g., 14 (unopened containers only)">
+                            <small style="color:#888; display:block; margin-top:4px;">Open/partially used containers are handled digitally — do not include or weigh them.</small>
                         </div>
                         <div class="form-group">
                             <label>Audit Notes / Remarks:</label>
@@ -749,6 +758,7 @@
                 <button type="button" class="pill-btn active" onclick="filterSpillageTypePill('ALL', this)">All Adjustments</button>
                 <button type="button" class="pill-btn" onclick="filterSpillageTypePill('SPILLAGE', this)">Spillage / Wastage</button>
                 <button type="button" class="pill-btn" onclick="filterSpillageTypePill('AUDIT', this)">Stock-Out Audits</button>
+                <button type="button" class="pill-btn" onclick="filterSpillageTypePill('VARIANCE', this)">Variance (Evening Audit)</button>
             </div>
             <input type="hidden" id="spillage-type-filter" value="ALL">
             <button type="button" class="btn-action" style="padding: 6px 12px; font-size:0.85rem; background-color:var(--slate-neutral);" onclick="clearSpillageFilters()">
@@ -1218,6 +1228,47 @@
             <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" class="btn-action" style="background-color:#666;" onclick="closeSecurityModal()">Cancel</button>
                 <button type="button" class="btn-action btn-danger-confirm" onclick="verifyAndExecutePendingAction()">Confirm &amp; Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PHASE 3: SOFT AUDIT RECONCILIATION MODAL (stress-free variance resolution) -->
+    <div id="audit-reconcile-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-scale-balanced"></i> Small Mismatch Found — No Worries</h3>
+                <button class="modal-close-btn" onclick="closeAuditReconcileModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="reconcile-discrepancy-box" style="background:#fffaf0; border:1px solid #ffe0b2; border-radius:10px; padding:12px 15px; margin-bottom:12px; font-size:0.88rem; line-height:1.5;">
+                    <!-- Dynamically populated via admin.js -->
+                </div>
+                <p style="font-size:0.88rem; color:#555; margin-bottom:14px; line-height:1.5;">
+                    Tiny differences like this are completely normal on busy shifts — heavy pours, extra
+                    customer customizations, or quick tastings all shift the shelf slightly.
+                    <strong>Nothing will be logged as wastage.</strong> Just tell us what best explains it, and the
+                    system will quietly catch up to reality.
+                </p>
+                <div class="form-group">
+                    <label>What Best Explains This?</label>
+                    <div class="custom-dropdown" id="audit-variance-reason-dropdown">
+                        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                            <span class="dropdown-selected-text">-- Choose a Reason Code --</span>
+                            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                        </div>
+                        <div class="dropdown-menu" id="audit-variance-reason-options">
+                            <div class="dropdown-option" onclick="selectAuditVarianceReason(this, 'CUSTOMER_CUSTOMIZATION')">Customer Customization / Extra Serving</div>
+                            <div class="dropdown-option" onclick="selectAuditVarianceReason(this, 'HEAVY_POUR')">Barista Heavy Pour / Shift Variance</div>
+                            <div class="dropdown-option" onclick="selectAuditVarianceReason(this, 'STAFF_TASTING')">Staff Tasting / Quality Check</div>
+                            <div class="dropdown-option" onclick="selectAuditVarianceReason(this, 'SHRINKAGE')">Unrecorded Loss / Shrinkage</div>
+                        </div>
+                        <input type="hidden" id="audit-variance-reason">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex; gap:10px; justify-content:flex-end;">
+                <button type="button" class="btn-action" style="background-color:#666;" onclick="closeAuditReconcileModal()">Cancel</button>
+                <button type="button" class="btn-action" onclick="confirmSoftReconcile()"><i class="fa-solid fa-check"></i> Reconcile &amp; Reset</button>
             </div>
         </div>
     </div>
