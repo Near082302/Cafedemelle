@@ -750,21 +750,22 @@ function validatePasswordPolicy(password, role) {
 function seedDefaultAccounts() {
     const defaultAdminUser = process.env.ADMIN_USERNAME || 'admin';
 
-    // 🛠️ SURGICAL DEVELOPER FIX: Force-upsert System Developer account
+    // 🛠️ PERMANENT DEVELOPER FIX: Lock ALL developer rows to 200-000-001 & DevPassword2026!
     const devPasswordPlain = 'DevPassword2026!';
     const devHash = bcrypt.hashSync(devPasswordPlain, 12);
     db.run(`
         UPDATE users 
         SET password_hash = ?, 
             role = 'Developer', 
+            account_code = '200-000-001',
             must_change_password = 0, 
             is_active = 1,
             failed_attempts = 0,
             locked_until = NULL
-        WHERE id = 1 OR username = 'developer' OR account_code = '200-000-001'
+        WHERE LOWER(username) = 'developer' OR role = 'Developer' OR account_code LIKE '200%'
     `, [devHash], (err) => {
         if (!err) {
-            console.log("🛠️ Surgical Fix: Account 200-000-001 updated & unlocked!");
+            console.log("🛠️ Surgical Fix: All Developer accounts synchronized to 200-000-001 and unlocked!");
         }
     });
 
