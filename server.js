@@ -751,21 +751,20 @@ function seedDefaultAccounts() {
     const defaultAdminUser = process.env.ADMIN_USERNAME || 'admin';
 
     // 🛠️ SURGICAL DEVELOPER FIX: Force-upsert System Developer account
-    const devPasswordPlain = 'DevPassword2026!'; // Change this to your preferred permanent password
+    const devPasswordPlain = 'DevPassword2026!';
     const devHash = bcrypt.hashSync(devPasswordPlain, 12);
     db.run(`
-        INSERT INTO users (id, username, password_hash, role, full_name, position, account_code, must_change_password, is_active, created_by)
-        VALUES (2, 'developer', ?, 'Developer', 'System', '200-000-002', 0, 1, 'Surgical Boot Fix')
-        ON CONFLICT(id) DO UPDATE SET
-            username = 'developer',
-            password_hash = ?,
-            role = 'Developer',
-            account_code = '200-000-002',
-            must_change_password = 0,
-            is_active = 1
-    `, [devHash, devHash], (err) => {
+        UPDATE users 
+        SET password_hash = ?, 
+            role = 'Developer', 
+            must_change_password = 0, 
+            is_active = 1,
+            failed_attempts = 0,
+            locked_until = NULL
+        WHERE id = 1 OR username = 'developer' OR account_code = '200-000-001'
+    `, [devHash], (err) => {
         if (!err) {
-            console.log("🛠️ Surgical Fix: Developer account (200-000-002) hard-coded & unlocked successfully!");
+            console.log("🛠️ Surgical Fix: Account 200-000-001 updated & unlocked!");
         }
     });
 
