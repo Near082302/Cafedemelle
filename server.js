@@ -575,12 +575,12 @@ function initDatabaseSchema() {
         db.get(`SELECT COUNT(*) as count FROM inventory_items`, [], (err, row) => {
             if (!err && row && row.count === 0) {
                 const defaultItems = [
-                    ['Espresso Coffee Beans Bag', 'Bags', 15, 3, null, 450.00],
-                    ['Whole Milk Bottle', 'Bottles', 24, 5, null, 85.00],
-                    ['Vanilla Syrup Bottle', 'Bottles', 8, 2, null, 320.00],
-                    ['Korean Garlic Bun Box', 'Boxes', 10, 2, null, 150.00],
-                    ['Paper Coffee Cups Ream', 'Reams', 12, 3, null, 210.00]
-                ];
+            ['Espresso Coffee Beans Bag', 'Bags', 15, 3, 450.00],
+            ['Whole Milk Bottle', 'Bottles', 24, 5, 85.00],
+            ['Vanilla Syrup Bottle', 'Bottles', 8, 2, 320.00],
+            ['Korean Garlic Bun Box', 'Boxes', 10, 2, 150.00],
+            ['Paper Coffee Cups Ream', 'Reams', 12, 3, 210.00]
+        ];
                 const stmt = db.prepare(`INSERT INTO inventory_items (item_name, container_unit, stock_quantity, safety_threshold, item_cost) VALUES (?, ?, ?, ?, ?)`);
                 defaultItems.forEach(item => stmt.run(item));
                 stmt.finalize();
