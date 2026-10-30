@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cafe de Melle - Executive Manager Portal</title>
+    <title>Cafe de Melle — Employee Access Portal</title>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -21,27 +21,25 @@
             --card-bg: #FFFFFF;      /* White Card Background */
             --danger: #c62828;       /* Red Alert */
             --danger-light: #fde8e8; /* Soft Red Toast Background */
+            --warn-light: #fff8e1;
             --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* ===========================================================================
-           2. VIEWPORT & CENTERED GLASS CONTAINER ACCOMMODATIONS
-           =========================================================================== */
-        body { 
-            background-color: var(--bg-color); 
+        body {
+            background-color: var(--bg-color);
             background-image: radial-gradient(circle at 50% 50%, rgba(95, 143, 95, 0.08) 0%, transparent 60%);
-            color: var(--text-dark); 
-            display: flex; 
+            color: var(--text-dark);
+            display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh; 
+            min-height: 100vh;
             padding: 20px;
         }
 
@@ -90,7 +88,90 @@
         }
 
         /* ===========================================================================
-           3. ACCESSIBLE CORNER/TOP ERROR ALERT TOAST
+           2. STEP HEADER + PROGRESS DOTS
+           =========================================================================== */
+        .step-band {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .step-band.active { display: flex; }
+
+        .step-title {
+            font-size: 1.02rem;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .step-hint { font-size: 0.84rem; color: #6b6b6b; line-height: 1.45; }
+
+        .progress-dots { display: flex; gap: 6px; align-items: center; }
+        .progress-dots span {
+            width: 26px; height: 5px; border-radius: 3px;
+            background-color: var(--light-accent);
+            transition: var(--transition-smooth);
+        }
+        .progress-dots span.done { background-color: var(--secondary); }
+        .progress-dots span.current { background-color: var(--primary); }
+
+        /* ===========================================================================
+           3. EMPLOYEE IDENTIFICATION CARD (STEP 2 HEADER)
+           =========================================================================== */
+        .employee-card {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--light-accent);
+            border-radius: 12px;
+            padding: 16px;
+            align-items: center;
+            text-align: center;
+        }
+        .employee-card.active { display: flex; }
+
+        .avatar-circle {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: #fff;
+            font-weight: 800;
+            font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 8px rgba(0, 75, 0, 0.2);
+        }
+
+        .employee-name { font-size: 1.05rem; font-weight: 800; color: var(--text-dark); }
+        .employee-meta { font-size: 0.84rem; color: #6b6b6b; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+        .role-badge {
+            font-size: 0.74rem; font-weight: 800;
+            padding: 3px 10px; border-radius: 20px;
+            letter-spacing: 0.03em;
+        }
+        .role-badge.Staff { background: #ecf3ea; color: #3c6e3c; border: 1px solid #cfe0cc; }
+        .role-badge.Admin { background: #e8f0fd; color: #1a4d8f; border: 1px solid #bcd0f0; }
+        .role-badge.Owner { background: #fdf6e3; color: #8a6d1a; border: 1px solid #ecd9a0; }
+        .role-badge.Developer { background: #efebfd; color: #4b3a8f; border: 1px solid #d0c5f0; }
+
+        .employee-code {
+            font-size: 0.8rem; font-weight: 700; color: var(--chocolate);
+            background: #fff; border: 1px dashed var(--light-accent);
+            padding: 4px 12px; border-radius: 8px; letter-spacing: 0.08em;
+        }
+
+        .switch-link {
+            background: none; border: none; color: var(--secondary);
+            font-size: 0.8rem; font-weight: 700; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 2px;
+        }
+        .switch-link:hover { color: var(--primary); }
+
+        /* ===========================================================================
+           4. ACCESSIBLE ERROR ALERT TOAST
            =========================================================================== */
         #error-toast {
             display: none;
@@ -108,6 +189,13 @@
             animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
+        #error-toast.info {
+            background-color: var(--warn-light);
+            border-color: rgba(212, 168, 79, 0.5);
+            border-left-color: var(--gold);
+            color: #7a5c10;
+        }
+
         #error-toast i {
             font-size: 1.1rem;
             margin-top: 2px;
@@ -120,18 +208,11 @@
         }
 
         /* ===========================================================================
-           4. SMOOTH FLOATING INPUT LABELS & INPUT FIELD STYLES
+           5. FORM FIELDS
            =========================================================================== */
-        .form-group {
-            position: relative;
-            margin-bottom: 20px;
-        }
+        .form-group { position: relative; margin-bottom: 4px; }
 
-        .input-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
+        .input-wrapper { position: relative; display: flex; align-items: center; }
 
         .form-control {
             width: 100%;
@@ -146,12 +227,13 @@
             transition: var(--transition-smooth);
         }
 
+        .form-control.code-input { letter-spacing: 0.12em; font-weight: 700; }
+
         .form-control:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(0, 75, 0, 0.12);
         }
 
-        /* Floating Label Mechanics */
         .floating-label {
             position: absolute;
             left: 14px;
@@ -165,7 +247,6 @@
             padding: 0 2px;
         }
 
-        /* Scale and Glide Upward state when active or non-empty */
         .form-control:focus ~ .floating-label,
         .form-control:not(:placeholder-shown) ~ .floating-label {
             top: 10px;
@@ -175,31 +256,25 @@
             color: var(--primary);
         }
 
-        /* ===========================================================================
-           5. PASSWORD VISIBILITY TOGGLE ICON
-           =========================================================================== */
         .password-toggle-btn {
             position: absolute;
             right: 12px;
-            background: none;
-            border: none;
-            color: #777;
-            cursor: pointer;
-            padding: 6px;
-            font-size: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.2s ease;
-            z-index: 2;
+            background: none; border: none; color: #777;
+            cursor: pointer; padding: 6px; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: color 0.2s ease; z-index: 2;
         }
+        .password-toggle-btn:hover { color: var(--primary); }
 
-        .password-toggle-btn:hover {
-            color: var(--primary);
-        }
+        /* Password strength meter (forced change step) */
+        .strength-meter { display: none; flex-direction: column; gap: 6px; margin-top: 10px; }
+        .strength-meter.active { display: flex; }
+        .strength-track { height: 6px; border-radius: 4px; background: #e7e2d6; overflow: hidden; }
+        .strength-fill { height: 100%; width: 0%; border-radius: 4px; transition: var(--transition-smooth); }
+        .strength-label { font-size: 0.76rem; font-weight: 700; color: #6b6b6b; }
 
         /* ===========================================================================
-           6. BUTTON SUBMISSION LOADING STATE
+           6. BUTTONS
            =========================================================================== */
         .btn-submit {
             width: 100%;
@@ -218,16 +293,8 @@
             gap: 10px;
             box-shadow: 0 4px 12px rgba(0, 75, 0, 0.2);
         }
-
-        .btn-submit:hover:not(:disabled) {
-            background-color: var(--secondary);
-        }
-
-        .btn-submit:disabled {
-            opacity: 0.75;
-            cursor: not-allowed;
-            animation: pulseState 1.5s infinite ease-in-out;
-        }
+        .btn-submit:hover:not(:disabled) { background-color: var(--secondary); }
+        .btn-submit:disabled { opacity: 0.75; cursor: not-allowed; animation: pulseState 1.5s infinite ease-in-out; }
 
         @keyframes pulseState {
             0% { opacity: 0.75; }
@@ -235,11 +302,32 @@
             100% { opacity: 0.75; }
         }
 
+        .btn-back {
+            width: 100%;
+            background: none; border: none; color: #777;
+            font-size: 0.84rem; font-weight: 700; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 6px;
+        }
+        .btn-back:hover { color: var(--primary); }
+
+        /* ===========================================================================
+           7. SMALL PRINT / STATE SCREENS
+           =========================================================================== */
+        .state-screen { display: none; text-align: center; }
+        .state-screen.active { display: block; }
+        .state-screen i { font-size: 2.4rem; margin-bottom: 10px; }
+        .state-screen h3 { color: var(--primary); font-size: 1.1rem; margin-bottom: 6px; }
+        .state-screen p { font-size: 0.88rem; color: #6b6b6b; line-height: 1.5; }
+
+        .state-locked i { color: var(--danger); }
+        .state-inactive i { color: #777; }
+
+        .fine-print { text-align: center; font-size: 0.72rem; color: #9a9a9a; line-height: 1.5; }
+
         /* Mobile specific spacing accommodations */
         @media (max-width: 480px) {
-            .login-card {
-                padding: 30px 20px;
-            }
+            .login-card { padding: 30px 20px; }
         }
     </style>
 </head>
@@ -250,152 +338,458 @@
             <img src="images/Logo.jpg" alt="Cafe de Melle Logo" class="brand-logo">
             <div>
                 <h1>Cafe de Melle</h1>
-                <p>Executive Manager Portal</p>
+                <p>Employee Access Portal</p>
             </div>
         </header>
 
-        <!-- ACCESSIBLE CORNER/INLINE ERROR CARD TOAST -->
+        <!-- PROGRESS DOTS -->
+        <div id="progress-dots" class="progress-dots" style="justify-content:center;">
+            <span id="dot-1" class="current"></span>
+            <span id="dot-2"></span>
+            <span id="dot-3"></span>
+        </div>
+
+        <!-- ACCESSIBLE ERROR/INFO TOAST -->
         <div id="error-toast" role="alert" aria-live="assertive">
-            <i class="fa-solid fa-circle-exclamation"></i>
+            <i class="fa-solid fa-circle-exclamation" id="error-toast-icon"></i>
             <span id="error-toast-text">Authentication failed. Please verify credentials.</span>
         </div>
 
-        <form id="login-form" novalidate>
-            <!-- USERNAME INPUT WITH FLOATING LABEL -->
-            <div class="form-group">
-                <div class="input-wrapper">
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
-                        class="form-control" 
-                        placeholder=" " 
-                        required 
-                        autocomplete="username"
-                    />
-                    <label for="username" class="floating-label">Username</label>
+        <!-- ==================================================================== -->
+        <!-- STEP 1 — IDENTIFY: account code OR username                          -->
+        <!-- ==================================================================== -->
+        <section id="step-identify" class="step-band active">
+            <div>
+                <div class="step-title"><i class="fa-solid fa-id-badge"></i> Who are you signing in as?</div>
+                <div class="step-hint">Enter your 9-digit Account Code (e.g., 300-000-015) or your username. Team members never type passwords on the first screen.</div>
+            </div>
+
+            <form id="identify-form" novalidate>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <input type="text" id="handle-input" class="form-control code-input" placeholder=" " required autocomplete="username" inputmode="text">
+                        <label for="handle-input" class="floating-label">Account Code or Username</label>
+                    </div>
+                </div>
+                <button type="submit" id="identify-btn" class="btn-submit" style="margin-top:16px;">
+                    <span id="identify-btn-text">Continue</span>
+                </button>
+            </form>
+        </section>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 2 — VERIFY: password                                            -->
+        <!-- ==================================================================== -->
+        <section id="step-verify" class="step-band" style="display:none;">
+            <!-- Employee identification card -->
+            <div id="employee-card" class="employee-card">
+                <div class="avatar-circle" id="employee-avatar">?</div>
+                <div>
+                    <div class="employee-name" id="employee-name">Employee</div>
+                    <div class="employee-meta">
+                        <span id="employee-position">Team Member</span>
+                        <span class="role-badge Staff" id="employee-role">Staff</span>
+                    </div>
+                </div>
+                <div class="employee-code" id="employee-code">•••-•••-•••</div>
+                <button type="button" class="switch-link" onclick="resetFlow()">Not you? Switch account <i class="fa-solid fa-right-left"></i></button>
+            </div>
+
+            <form id="verify-form" novalidate>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <input type="password" id="password-input" class="form-control" placeholder=" " required autocomplete="current-password">
+                        <label for="password-input" class="floating-label">Password</label>
+                        <button type="button" id="toggle-password-btn" class="password-toggle-btn" aria-label="Toggle password visibility" tabindex="-1">
+                            <i class="fa-solid fa-eye" id="toggle-password-icon"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" id="verify-btn" class="btn-submit" style="margin-top:16px;">
+                    <span id="verify-btn-text">Sign In Securely</span>
+                </button>
+            </form>
+
+            <button type="button" class="btn-back" onclick="resetFlow()"><i class="fa-solid fa-arrow-left"></i> Back to account selection</button>
+        </section>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 3 — FORCED PASSWORD CHANGE (must_change_password accounts)      -->
+        <!-- ==================================================================== -->
+        <section id="step-change" class="step-band" style="display:none;">
+            <div>
+                <div class="step-title"><i class="fa-solid fa-key"></i> Set your personal password</div>
+                <div class="step-hint" id="change-hint">For security, you must replace your temporary password before entering the panel.</div>
+            </div>
+
+            <div id="change-employee-card" class="employee-card" style="border-style:dashed;">
+                <div class="avatar-circle" id="change-avatar">?</div>
+                <div>
+                    <div class="employee-name" id="change-employee-name">Employee</div>
+                    <div class="employee-meta">
+                        <span id="change-employee-position">Team Member</span>
+                        <span class="role-badge Staff" id="change-employee-role">Staff</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- PASSWORD INPUT WITH FLOATING LABEL & VISIBILITY TOGGLE -->
-            <div class="form-group">
-                <div class="input-wrapper">
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        class="form-control" 
-                        placeholder=" " 
-                        required 
-                        autocomplete="current-password"
-                    />
-                    <label for="password" class="floating-label">Password</label>
-                    <button 
-                        type="button" 
-                        id="toggle-password-btn" 
-                        class="password-toggle-btn" 
-                        aria-label="Toggle password visibility"
-                        tabindex="-1"
-                    >
-                        <i class="fa-solid fa-eye" id="toggle-password-icon"></i>
-                    </button>
+            <form id="change-form" novalidate>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <input type="password" id="new-password" class="form-control" placeholder=" " required autocomplete="new-password">
+                        <label for="new-password" class="floating-label">New Password</label>
+                        <button type="button" id="toggle-new-btn" class="password-toggle-btn" tabindex="-1" aria-label="Toggle password visibility">
+                            <i class="fa-solid fa-eye" id="toggle-new-icon"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
+                <div id="strength-meter" class="strength-meter">
+                    <div class="strength-track"><div class="strength-fill" id="strength-fill"></div></div>
+                    <div class="strength-label" id="strength-label">Password strength</div>
+                </div>
+                <div class="form-group" style="margin-top:14px;">
+                    <div class="input-wrapper">
+                        <input type="password" id="confirm-password" class="form-control" placeholder=" " required autocomplete="new-password">
+                        <label for="confirm-password" class="floating-label">Confirm New Password</label>
+                    </div>
+                </div>
+                <button type="submit" id="change-btn" class="btn-submit" style="margin-top:16px;">
+                    <span id="change-btn-text">Save &amp; Enter Panel</span>
+                </button>
+            </form>
+        </section>
 
-            <!-- SUBMIT BUTTON WITH ACTIVE LOADING STATE -->
-            <button type="submit" id="submit-btn" class="btn-submit">
-                <span id="submit-btn-text">Sign In to Dashboard</span>
-            </button>
-        </form>
+        <!-- STATE SCREEN: LOCKED -->
+        <section id="state-locked" class="state-screen state-locked">
+            <i class="fa-solid fa-lock"></i>
+            <h3>Account Locked</h3>
+            <p id="state-locked-text">Too many failed attempts.</p>
+            <button type="button" class="btn-back" onclick="resetFlow()" style="margin-top:12px;"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        </section>
+
+        <!-- STATE SCREEN: INACTIVE -->
+        <section id="state-inactive" class="state-screen state-inactive">
+            <i class="fa-solid fa-user-slash"></i>
+            <h3>Account Deactivated</h3>
+            <p id="state-inactive-text">This account has been deactivated by management.</p>
+            <button type="button" class="btn-back" onclick="resetFlow()" style="margin-top:12px;"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        </section>
+
+        <div class="fine-print">
+            Secure access only. Every sign-in is monitored and recorded under the Cafe de Melle accountability log (RA 10173 compliant).
+        </div>
     </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const loginForm = document.getElementById('login-form');
-            const usernameInput = document.getElementById('username');
-            const passwordInput = document.getElementById('password');
+            /* ====================================================================
+               0. STATE
+               ==================================================================== */
+            let flowEmployee = null;   // { handle, display_name, role, ... } from identify
+            let pendingIsForced = false;
+
+            const els = {
+                dots: { 1: document.getElementById('dot-1'), 2: document.getElementById('dot-2'), 3: document.getElementById('dot-3') },
+                bands: {
+                    identify: document.getElementById('step-identify'),
+                    verify: document.getElementById('step-verify'),
+                    change: document.getElementById('step-change')
+                },
+                stateLocked: document.getElementById('state-locked'),
+                stateInactive: document.getElementById('state-inactive'),
+                toast: document.getElementById('error-toast'),
+                toastText: document.getElementById('error-toast-text'),
+                toastIcon: document.getElementById('error-toast-icon')
+            };
+
+            const showStep = (name) => {
+                Object.values(els.bands).forEach(b => b.style.display = 'none');
+                els.stateLocked.classList.remove('active');
+                els.stateInactive.classList.remove('active');
+                if (name === 'locked') { els.bands.verify.style.display = 'none'; els.stateLocked.classList.add('active'); return; }
+                if (name === 'inactive') { els.bands.verify.style.display = 'none'; els.stateInactive.classList.add('active'); return; }
+                els.bands[name].style.display = 'flex';
+                const dotIndex = name === 'identify' ? 1 : (name === 'verify' ? 2 : 3);
+                Object.keys(els.dots).forEach(k => {
+                    els.dots[k].className = parseInt(k, 10) < dotIndex ? 'done' : (parseInt(k, 10) === dotIndex ? 'current' : '');
+                });
+            };
+
+            function showErrorToast(message, info = false) {
+                els.toastText.textContent = message;
+                els.toast.classList.toggle('info', info);
+                els.toastIcon.className = info ? 'fa-solid fa-circle-info' : 'fa-solid fa-circle-exclamation';
+                els.toast.style.display = 'flex';
+            }
+            function hideErrorToast() { els.toast.style.display = 'none'; }
+            const busy = (btn, on, labelBusy, labelIdle) => {
+                btn.disabled = on;
+                btn.querySelector('span').textContent = on ? labelBusy : labelIdle;
+            };
+
+            /* ====================================================================
+               1. FORCED-CHANGE RESUME (session from a completed password verify)
+               ==================================================================== */
+            fetch('/api/admin/pending-session')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success && data.pending) {
+                        hideErrorToast();
+                        renderChangeStep(data.employee);
+                        showStep('change');
+                    }
+                })
+                .catch(() => {});
+
+            /* ====================================================================
+               2. STEP 1 — IDENTIFY
+               ==================================================================== */
+            const handleInput = document.getElementById('handle-input');
+            const identifyForm = document.getElementById('identify-form');
+            const identifyBtn = document.getElementById('identify-btn');
+
+            // Pretty-format pure digit entry as 300-000-015 while allowing usernames
+            handleInput.addEventListener('input', () => {
+                hideErrorToast();
+                const raw = handleInput.value;
+                const digits = raw.replace(/\D/g, '');
+                if (digits.length === 9 && raw.replace(/[^0-9\s-]/g, '').length === digits.length + 2) {
+                    handleInput.value = `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6,9)}`;
+                }
+            });
+
+            identifyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideErrorToast();
+                const handle = handleInput.value.trim();
+                if (!handle) { showErrorToast('Please enter your account code or username.'); return; }
+
+                busy(identifyBtn, true, 'Looking up account...', 'Continue');
+                try {
+                    const response = await fetch('/api/admin/login/identify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ handle })
+                    });
+                    const data = await response.json();
+
+                    if (data.success && data.state === 'identify-ok') {
+                        flowEmployee = data.employee;
+                        renderEmployeeCard(data.employee);
+                        showStep('verify');
+                        setTimeout(() => document.getElementById('password-input').focus(), 60);
+                    } else if (data.state === 'inactive') {
+                        document.getElementById('state-inactive-text').textContent = data.error || 'This account has been deactivated by management.';
+                        showStep('inactive');
+                    } else if (data.state === 'locked') {
+                        document.getElementById('state-locked-text').textContent = data.error || 'Too many failed attempts.';
+                        showStep('locked');
+                    } else {
+                        showErrorToast(data.error || 'No matching account found. Check your account code with your manager.');
+                    }
+                } catch (err) {
+                    showErrorToast('A network connection error occurred. Please try again.');
+                }
+                busy(identifyBtn, false, 'Looking up account...', 'Continue');
+            });
+
+            function renderEmployeeCard(emp) {
+                document.getElementById('employee-avatar').textContent = emp.initials || '?';
+                document.getElementById('employee-name').textContent = `Hi, ${emp.display_name}`;
+                document.getElementById('employee-position').textContent = emp.position || 'Team Member';
+                const roleBadge = document.getElementById('employee-role');
+                roleBadge.textContent = emp.role;
+                roleBadge.className = `role-badge ${emp.role}`;
+                document.getElementById('employee-code').textContent = emp.account_code_masked || '•••-•••-•••';
+                document.getElementById('employee-card').classList.add('active');
+            }
+
+            function resetFlow() {
+                flowEmployee = null;
+                pendingIsForced = false;
+                handleInput.value = '';
+                document.getElementById('password-input').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+                document.getElementById('employee-card').classList.remove('active');
+                hideErrorToast();
+                showStep('identify');
+                setTimeout(() => handleInput.focus(), 60);
+            }
+            window.resetFlow = resetFlow;
+
+            /* ====================================================================
+               3. STEP 2 — VERIFY PASSWORD (lockout-aware)
+               ==================================================================== */
+            const passwordInput = document.getElementById('password-input');
+            const verifyForm = document.getElementById('verify-form');
+            const verifyBtn = document.getElementById('verify-btn');
             const togglePasswordBtn = document.getElementById('toggle-password-btn');
             const togglePasswordIcon = document.getElementById('toggle-password-icon');
-            const submitBtn = document.getElementById('submit-btn');
-            const submitBtnText = document.getElementById('submit-btn-text');
-            const errorToast = document.getElementById('error-toast');
-            const errorToastText = document.getElementById('error-toast-text');
 
-            /* ===========================================================================
-               1. PASSWORD VISIBILITY TOGGLE HANDLER
-               =========================================================================== */
             togglePasswordBtn.addEventListener('click', () => {
                 const isPasswordType = passwordInput.getAttribute('type') === 'password';
                 passwordInput.setAttribute('type', isPasswordType ? 'text' : 'password');
-                
                 togglePasswordIcon.classList.toggle('fa-eye', !isPasswordType);
                 togglePasswordIcon.classList.toggle('fa-eye-slash', isPasswordType);
             });
-
-            /* ===========================================================================
-               2. HELPER TO SHOW ACCESSIBLE ERROR TOAST
-               =========================================================================== */
-            function showErrorToast(message) {
-                errorToastText.textContent = message;
-                errorToast.style.display = 'flex';
-            }
-
-            function hideErrorToast() {
-                errorToast.style.display = 'none';
-                errorToastText.textContent = '';
-            }
-
-            /* Clear toast errors on user re-typing */
-            usernameInput.addEventListener('input', hideErrorToast);
             passwordInput.addEventListener('input', hideErrorToast);
 
-            /* ===========================================================================
-               3. FORM SUBMISSION & BACKEND API INTERACTION
-               =========================================================================== */
-            loginForm.addEventListener('submit', async (e) => {
+            verifyForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 hideErrorToast();
-
-                const username = usernameInput.value.trim();
                 const password = passwordInput.value;
+                if (!password) { showErrorToast('Please enter your password.'); return; }
 
-                if (!username || !password) {
-                    showErrorToast('Username and password are required.');
-                    return;
-                }
-
-                // APPLY BUTTON SUBMISSION LOADING STATE
-                submitBtn.disabled = true;
-                submitBtnText.textContent = '🔒 Securing Session...';
-
+                busy(verifyBtn, true, 'Securing Session...', 'Sign In Securely');
                 try {
                     const response = await fetch('/api/admin/login', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ username, password })
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ handle: (flowEmployee && flowEmployee.handle) || handleInput.value.trim(), password })
                     });
-
                     const data = await response.json();
 
-                    if (response.ok && data.success) {
+                    if (data.success && data.must_change_password) {
+                        // Forced password change → dedicated un-bypassable flow
+                        pendingIsForced = true;
+                        renderChangeStepFromLogin(data.user);
+                        // hydrate position/min-length via pending-session endpoint
+                        hydratePendingDetails();
+                        passwordInput.value = '';
+                        showStep('change');
+                        setTimeout(() => document.getElementById('new-password').focus(), 60);
+                        return;
+                    }
+
+                    if (data.success) {
                         window.location.href = '/admin';
-                    } else {
-                        // Display exact backend error response or rate-limiting message
-                        showErrorToast(data.error || 'Invalid credentials. Please try again.');
-                        
-                        // RESTORE BUTTON STATE
-                        submitBtn.disabled = false;
-                        submitBtnText.textContent = 'Sign In to Dashboard';
+                        return;
+                    }
+
+                    showErrorToast(data.error || 'Invalid credentials. Please try again.');
+                    if (data.state === 'locked') {
+                        document.getElementById('state-locked-text').textContent = data.error;
+                        showStep('locked');
                     }
                 } catch (error) {
                     showErrorToast('A network connection error occurred. Please try again.');
-                    
-                    // RESTORE BUTTON STATE
-                    submitBtn.disabled = false;
-                    submitBtnText.textContent = 'Sign In to Dashboard';
                 }
+                busy(verifyBtn, false, 'Securing Session...', 'Sign In Securely');
+            });
+
+            function renderChangeStepFromLogin(user) {
+                const displayName = (user.full_name || user.username).trim().split(/\s+/).map((p, i) => (i === 0 ? p : (p.charAt(0) + '.'))).join(' ');
+                const initials = (user.full_name || user.username).trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('');
+                document.getElementById('change-avatar').textContent = initials || '?';
+                document.getElementById('change-employee-name').textContent = displayName;
+                document.getElementById('change-employee-position').textContent = 'Team Member';
+                const roleBadge = document.getElementById('change-employee-role');
+                roleBadge.textContent = user.role;
+                roleBadge.className = `role-badge ${user.role}`;
+            }
+
+            async function hydratePendingDetails() {
+                try {
+                    const res = await fetch('/api/admin/pending-session');
+                    const data = await res.json();
+                    if (data && data.pending) {
+                        renderChangeStep(data.employee);
+                    }
+                } catch (err) { /* non-critical */ }
+            }
+
+            /* ====================================================================
+               4. STEP 3 — FORCED PASSWORD CHANGE w/ STRENGTH METER
+               ==================================================================== */
+            const newPasswordInput = document.getElementById('new-password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            const changeForm = document.getElementById('change-form');
+            const changeBtn = document.getElementById('change-btn');
+            const strengthMeter = document.getElementById('strength-meter');
+            const strengthFill = document.getElementById('strength-fill');
+            const strengthLabel = document.getElementById('strength-label');
+            const toggleNewBtn = document.getElementById('toggle-new-btn');
+            const toggleNewIcon = document.getElementById('toggle-new-icon');
+
+            toggleNewBtn.addEventListener('click', () => {
+                const isPasswordType = newPasswordInput.getAttribute('type') === 'password';
+                newPasswordInput.setAttribute('type', isPasswordType ? 'text' : 'password');
+                toggleNewIcon.classList.toggle('fa-eye', !isPasswordType);
+                toggleNewIcon.classList.toggle('fa-eye-slash', isPasswordType);
+            });
+
+            function renderChangeStep(emp) {
+                if (!emp) return;
+                document.getElementById('change-avatar').textContent = emp.initials || '?';
+                document.getElementById('change-employee-name').textContent = emp.display_name || emp.full_name;
+                document.getElementById('change-employee-position').textContent = emp.position || 'Team Member';
+                const roleBadge = document.getElementById('change-employee-role');
+                roleBadge.textContent = emp.role;
+                roleBadge.className = `role-badge ${emp.role}`;
+                const minLen = emp.min_password_length || 8;
+                window._forcedMinPwLen = minLen;
+                document.getElementById('change-hint').textContent = `For security, you must replace your temporary password before entering the panel. Minimum ${minLen} characters with letters, a number, and a symbol.`;
+            }
+
+            newPasswordInput.addEventListener('input', () => {
+                hideErrorToast();
+                const minLen = window._forcedMinPwLen || ((flowEmployee || {}).min_password_length) || 8;
+                const val = newPasswordInput.value;
+                strengthMeter.classList.toggle('active', val.length > 0);
+                if (!val.length) { strengthFill.style.width = '0%'; return; }
+
+                let score = 0;
+                if (val.length >= minLen) score++;
+                if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+                if (/[0-9]/.test(val)) score++;
+                if (/[^A-Za-z0-9]/.test(val)) score++;
+                if (val.length >= minLen + 6 && score >= 3) score++;
+
+                const pct = [0, 25, 50, 75, 100, 100][score];
+                const color = ['#c62828', '#c62828', '#ef6c00', '#2e7d32', '#1a7f37', '#1a7f37'][score];
+                const label = ['Very weak', 'Weak', 'Almost — needs a number & symbol', 'Good', 'Strong', 'Strong'][score];
+                strengthFill.style.width = `${pct}%`;
+                strengthFill.style.backgroundColor = color;
+                strengthLabel.textContent = `${label} (minimum ${minLen} characters)`;
+            });
+            confirmPasswordInput.addEventListener('input', hideErrorToast);
+
+            changeForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideErrorToast();
+                const minLen = window._forcedMinPwLen || ((flowEmployee || {}).min_password_length) || 8;
+                const pw = newPasswordInput.value;
+                const confirm = confirmPasswordInput.value;
+
+                if (!pw || !confirm) { showErrorToast('Enter and confirm your new password.'); return; }
+                if (pw.length < minLen) {
+                    showErrorToast(`Password must be at least ${minLen} characters, with letters, a number and a symbol.`);
+                    return;
+                }
+                if (!(/[a-zA-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw))) {
+                    showErrorToast('Password must contain letters, a number, and a symbol.');
+                    return;
+                }
+                if (pw !== confirm) { showErrorToast('Passwords do not match. Please check both fields.'); return; }
+
+                busy(changeBtn, true, 'Securing Session...', 'Save & Enter Panel');
+                try {
+                    const response = await fetch('/api/admin/login/complete-change', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_password: pw })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        window.location.href = '/admin';
+                        return;
+                    }
+                    showErrorToast(data.error || 'Could not save the password. Please try again.');
+                } catch (err) {
+                    showErrorToast('A network connection error occurred. Please try again.');
+                }
+                busy(changeBtn, false, 'Securing Session...', 'Save & Enter Panel');
             });
         });
     </script>

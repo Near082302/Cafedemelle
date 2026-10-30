@@ -387,13 +387,22 @@ function verifyAndExecutePendingAction() {
    =========================================================================== */
 function loadDashboardData() {
     Promise.all([
-        fetch('/api/admin/dashboard-kpis').then(res => res.json()),
-        fetch('/api/menu').then(res => res.json()),
-        fetch('/api/hero-slides').then(res => res.json()),
-        fetch('/api/settings').then(res => res.json()),
-        fetch('/api/admin/inventory').then(res => res.json()),
-        fetch('/api/admin/audit-logs').then(res => res.json())
+        fetch('/api/admin/dashboard-kpis'),
+        fetch('/api/menu'),
+        fetch('/api/hero-slides'),
+        fetch('/api/settings'),
+        fetch('/api/admin/inventory'),
+        fetch('/api/admin/audit-logs')
     ])
+    .then(async responses => {
+        for (let res of responses) {
+            if (res.status === 429) {
+                showToast('Rate limit reached. Cooling down for a few seconds...', 'warning');
+                throw new Error('Rate limit exceeded (429)');
+            }
+        }
+        return Promise.all(responses.map(res => res.json()));
+    })
     .then(([data, items, slides, settings, inventoryItems, logs]) => {
         const sensorBadge = document.getElementById('commander-store-sensor-badge');
         if (sensorBadge) {
@@ -409,8 +418,11 @@ function loadDashboardData() {
 
         const exceptionLine = document.getElementById('commander-inventory-exception-line');
         const dashboardReorderList = document.getElementById('dashboard-reorder-checklist');
-        if (inventoryItems) {
-            const lowStock = inventoryItems.filter(i => i.stock_quantity <= i.safety_threshold);
+        
+        // 🛡️ Safe array guard preventing TypeError if inventoryItems is an error object or 429 response
+        const safeInventory = Array.isArray(inventoryItems) ? inventoryItems : [];
+        if (safeInventory.length > 0) {
+            const lowStock = safeInventory.filter(i => i.stock_quantity <= i.safety_threshold);
             if (exceptionLine) {
                 if (lowStock.length > 0) {
                     const itemNames = lowStock.map(i => `${escapeHtml(i.item_name)} (${i.stock_quantity} left)`).join(', ');
@@ -577,11 +589,12 @@ function loadActiveVouchers() {
         .then(data => {
             const tableBody = document.getElementById('active-vouchers-table-body');
             if (!tableBody) return;
-            if (!data || data.length === 0) {
+            const dataArray = Array.isArray(data) ? data : [];
+            if (dataArray.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888; padding:15px;">No active promo voucher codes currently claimed.</td></tr>';
                 return;
             }
-            tableBody.innerHTML = data.map(v => `
+            tableBody.innerHTML = dataArray.map(v => `
                 <tr>
                     <td data-label="Voucher Code"><span class="code-badge">${escapeHtml(v.code)}</span></td>
                     <td data-label="Customer Name"><strong>${escapeHtml(v.customer_name)}</strong></td>
@@ -638,8 +651,9 @@ function loadInventoryItems() {
     fetch('/api/admin/inventory')
         .then(res => res.json())
         .then(items => {
-            renderInventoryTable(items);
-            populateDynamicContainerDropdowns(items);
+            const itemsArray = Array.isArray(items) ? items : [];
+            renderInventoryTable(itemsArray);
+            populateDynamicContainerDropdowns(itemsArray);
         })
         .catch(err => console.error('Error loading inventory:', err));
 }
@@ -662,24 +676,51 @@ function renderInventoryTable(items) {
             ? '<span class="badge-audit-red"><i class="fa-solid fa-triangle-exclamation"></i> LOW STOCK (' + item.stock_quantity + ')</span>' 
             : '<span class="badge-audit-green"><i class="fa-solid fa-check"></i> STABLE (' + item.stock_quantity + ')</span>';
 
-        // PART 2 Many-to-Many: show a badge group of ALL linked menu items (or an action hint to link them)
+        // PART 2 Many-to-Many: Option 1 Compact Summary Badge with Modal/Pop-over
         let linkedMenuDisplay;
         const linkedList = Array.isArray(item.linked_menu_list) ? item.linked_menu_list : [];
-        if (linkedList.length) {
-            linkedMenuDisplay = linkedList.map(n => '<span class="code-badge" style="background:var(--secondary); font-size:0.75rem; margin:2px 2px 2px 0;">' + escapeHtml(n) + '</span>').join('');
+        if (linkedList.length > 0) {
+            const totalCount = linkedList.length;
+            const previewItems = linkedList.slice(0, 2).join(', ');
+            const moreCount = totalCount > 2 ? ` +${totalCount - 2} more` : '';
+            const pillLabel = totalCount === 1 ? linkedList[0] : `${previewItems}${moreCount}`;
+
+            linkedMenuDisplay = `
+                <div class="custom-dropdown linked-items-compact-dropdown" style="display:inline-block; width:auto; text-align:left;">
+                    <div class="dropdown-trigger badge-count-pill" onclick="toggleCustomDropdown(this)" style="padding: 6px 12px; font-size: 0.8rem; background: var(--alt-bg); border: 1px solid var(--secondary); border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-utensils" style="color: var(--primary);"></i>
+                        <span class="dropdown-selected-text" style="font-weight: 700; color: var(--primary);">${totalCount} Linked Items (${escapeHtml(pillLabel)})</span>
+                        <i class="fa-solid fa-chevron-down dropdown-arrow" style="font-size: 0.75rem;"></i>
+                    </div>
+                    <div class="dropdown-menu" style="min-width: 220px; max-height: 200px; overflow-y: auto; padding: 4px 0;">
+                        <div style="padding: 6px 12px; font-size: 0.75rem; font-weight: 800; color: var(--chocolate); border-bottom: 1px solid var(--light-accent); background: var(--bg-color);">
+                            All Linked Menu Items (${totalCount})
+                        </div>
+                        ${linkedList.map(name => `
+                            <div class="dropdown-option" style="padding: 8px 12px; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(name)}">
+                                <i class="fa-solid fa-circle-dot" style="font-size: 0.5rem; margin-right: 6px; color: var(--secondary);"></i> ${escapeHtml(name)}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
         } else {
-            linkedMenuDisplay = '<span style="color:#888; font-style:italic;">Unlinked</span>';
+            linkedMenuDisplay = '<span style="color:#888; font-style:italic; font-size:0.82rem;">Unlinked</span>';
         }
 
-        let actionsHtml = '';
-        if (isAdminOrAbove) {
-            actionsHtml = '<button class="btn-action" style="padding: 6px 12px; font-size:0.8rem; background-color:var(--slate-neutral);" onclick="openEditContainerModal(' + item.id + ', \'' + escapeHtml(item.item_name) + '\', ' + (item.item_cost || 0) + ', ' + item.safety_threshold + ')">' +
-                          '<i class="fa-solid fa-pen-to-square"></i> Edit</button>' +
-                          '<button class="btn-action btn-danger" style="padding: 6px 12px; font-size:0.8rem;" onclick="deleteInventoryItem(' + item.id + ')">' +
-                          '<i class="fa-solid fa-trash"></i> Delete</button>';
-        } else {
-            actionsHtml = '<span style="color:#888; font-size:0.8rem;">View Only</span>';
-        }
+        // Properly define actions buttons with correct parameter escaping
+        const actionsHtml = `
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn-action" style="padding:4px 8px; font-size:0.8rem;" onclick="openEditContainerModal(${item.id}, '${escapeHtml(item.item_name)}', ${item.item_cost || 0}, ${item.safety_threshold})">
+                    <i class="fa-solid fa-pen"></i> Edit
+                </button>
+                ${isAdminOrAbove ? `
+                    <button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteInventoryItem(${item.id})">
+                        <i class="fa-solid fa-trash"></i> Delete
+                    </button>
+                ` : ''}
+            </div>
+        `;
 
         return '<tr>' +
             '<td data-label="Container Name"><strong>' + escapeHtml(item.item_name) + '</strong></td>' +
@@ -2138,8 +2179,25 @@ function loadAuditLogs() {
 }
 
 /* ===========================================================================
-   9. SECURITY & ROLES TAB
+   9. SECURITY & ROLES TAB (PART 3 — SECURITY PLAN: HR DIRECTORY + LIFECYCLE)
    =========================================================================== */
+const AVATAR_BADGES = { Owner: 'badge-owner', Developer: 'badge-dev', Admin: 'badge-active', Staff: 'badge-active' };
+
+function formatAccountCodeChip(codeDigits) {
+    if (!codeDigits) return '—';
+    if (String(codeDigits).includes('-')) return codeDigits;
+    const d = String(codeDigits).padStart(9, '0');
+    return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6, 9)}`;
+}
+
+function roleBadgeClass(role) {
+    return AVATAR_BADGES[role] || 'badge-active';
+}
+
+function initialsOf(name) {
+    return String(name || '?').trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || '?';
+}
+
 function loadSystemUsers() {
     fetch('/api/admin/users')
         .then(res => res.json())
@@ -2148,43 +2206,156 @@ function loadSystemUsers() {
             if (!tbody) return;
 
             if (!users || users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888; padding:15px;">No system accounts registered.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888; padding:15px;">No employee accounts registered.</td></tr>';
                 return;
             }
 
             const currentRole = currentUser ? currentUser.role : 'Staff';
             const currentUserId = currentUser ? currentUser.id : null;
+            const isDeveloper = currentRole === 'Developer';
 
             tbody.innerHTML = users.map(u => {
-                let roleClass = 'badge-active';
-                if (u.role === 'Owner') roleClass = 'badge-owner';
-                else if (u.role === 'Developer') roleClass = 'badge-dev';
+                const codeChip = formatAccountCodeChip(u.account_id);
 
-                // Strict RBAC UI Evaluation for Account Deletion
-                let canDelete = false;
-                if (currentRole === 'Developer' && u.id !== currentUserId) {
-                    canDelete = true;
-                } else if (currentRole === 'Admin' && u.role === 'Staff') {
-                    canDelete = true;
+                // Status badge (P4): Active / Temp password / Locked / Inactive
+                let statusHtml;
+                if (u.status === 'inactive') {
+                    statusHtml = `<span class="status-badge status-inactive"><i class="fa-solid fa-circle-stop"></i> Inactive</span>`;
+                } else if (u.status === 'locked') {
+                    statusHtml = `<span class="status-badge status-locked"><i class="fa-solid fa-lock"></i> Locked</span>`;
+                } else if (u.status === 'temp_password') {
+                    statusHtml = `<span class="status-badge status-temp"><i class="fa-solid fa-hourglass-half"></i> Temp Password</span>`;
+                } else {
+                    statusHtml = `<span class="status-badge status-active"><i class="fa-solid fa-circle-check"></i> Active</span>`;
                 }
+
+                const isSelf = u.id === currentUserId;
+                const canManage = (function () {
+                    if (isSelf) return currentRole !== 'Staff'; // profiles self-manage below
+                    if (currentRole === 'Developer') return true;
+                    if (currentRole === 'Owner') return u.role === 'Staff' || u.role === 'Admin';
+                    if (currentRole === 'Admin') return u.role === 'Staff';
+                    return false;
+                })();
+
+                // Row actions per role ladder
+                let actionsHtml = '';
+                if (!canManage && !isSelf) {
+                    actionsHtml = '<span style="color:#888; font-size:0.78rem;">Protected</span>';
+                } else {
+                    const buttons = [];
+                    if (canManage && !isSelf) {
+                        buttons.push(`<button class="btn-action" style="padding:4px 8px; font-size:0.75rem; background-color:var(--slate-neutral);" onclick="openSecurityModal(() => userAccountAction(${u.id}, 'reset-password'))"><i class="fa-solid fa-key"></i> Reset PW</button>`);
+                        if (u.status === 'locked') {
+                            buttons.push(`<button class="btn-action" style="padding:4px 8px; font-size:0.75rem;" onclick="openSecurityModal(() => userAccountAction(${u.id}, 'force-unlock'))"><i class="fa-solid fa-unlock"></i> Unlock</button>`);
+                        }
+                        if (u.status === 'inactive') {
+                            buttons.push(`<button class="btn-action" style="padding:4px 8px; font-size:0.75rem;" onclick="openSecurityModal(() => userAccountAction(${u.id}, 'reactivate'))"><i class="fa-solid fa-user-check"></i> Reactivate</button>`);
+                        } else {
+                            buttons.push(`<button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="openSecurityModal(() => userAccountAction(${u.id}, 'deactivate'))"><i class="fa-solid fa-user-slash"></i> Deactivate</button>`);
+                        }
+                    }
+                    if (isDeveloper && !isSelf) {
+                        buttons.push(`<button class="btn-action btn-danger-confirm" style="padding:4px 8px; font-size:0.75rem;" onclick="deleteUserAccount(${u.id})"><i class="fa-solid fa-trash"></i> Hard-Revoke</button>`);
+                    }
+                    actionsHtml = buttons.join(' ');
+                }
+
+                const lastLogin = u.last_login ? new Date(String(u.last_login).replace(' ', 'T') + 'Z').toLocaleString() : '<span style="color:#aaa;">Never</span>';
 
                 return `
                     <tr>
-                        <td>#${u.account_id || u.id}</td>
-                        <td><strong>${escapeHtml(u.username)}</strong></td>
-                        <td><span class="${roleClass}">${escapeHtml(u.role)}</span></td>
-                        <td>
-                            ${canDelete ? `
-                                <button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteUserAccount(${u.id})">
-                                    <i class="fa-solid fa-user-xmark"></i> Delete
-                                </button>
-                            ` : '<span style="color:#888; font-size:0.8rem;">Protected Account</span>'}
-                        </td>
+                        <td data-label="Employee"><strong>
+                            <span class="avatar-chip" title="${escapeHtml(u.full_name)}">${escapeHtml(initialsOf(u.full_name))}</span>
+                            ${escapeHtml(u.full_name)}
+                            <span style="color:#888; font-weight:600; font-size:0.8rem; display:block;">@${escapeHtml(u.username)}</span>
+                        </strong></td>
+                        <td data-label="Account Code"><span class="code-badge">${codeChip}</span></td>
+                        <td data-label="Position">${escapeHtml(u.position || '—')}</td>
+                        <td data-label="Role"><span class="${roleBadgeClass(u.role)}">${escapeHtml(u.role)}</span></td>
+                        <td data-label="Status">${statusHtml}</td>
+                        <td data-label="Last Login">${lastLogin}</td>
+                        <td data-label="Action"><div style="display:flex; gap:6px; flex-wrap:wrap;">${actionsHtml}</div></td>
                     </tr>
                 `;
             }).join('');
+
+            renderDeveloperSecurityStrip();
         })
         .catch(err => console.error('Error loading users:', err));
+}
+
+// P4: Developer console strip — deep audit of account-lifecycle security events
+function renderDeveloperSecurityStrip() {
+    const strip = document.getElementById('developer-console-strip');
+    const tbody = document.getElementById('dev-security-log-body');
+    if (!strip || !tbody) return;
+
+    const userRole = currentUser ? currentUser.role : 'Staff';
+    if (userRole !== 'Developer') {
+        strip.style.display = 'none';
+        return;
+    }
+    strip.style.display = 'block';
+
+    fetch('/api/admin/audit-logs')
+        .then(res => res.json())
+        .then(rows => {
+            const lifecycleActions = ['USER_CREATE', 'USER_DELETE', 'SUSPEND_ACCOUNT', 'ACCOUNT_REACTIVATED', 'PASSWORD_RESET_INITIATED', 'ACCOUNT_UNLOCKED', 'LOCKOUT_TRIGGERED', 'PROFILE_UPDATED', 'CREDENTIALS_UPDATE', 'PASSWORD_FORCED_CHANGE_DONE', 'ACCOUNT_SEEDED', 'ACCOUNT_SCHEMA_V2', 'SESSION_KILLED_BY_DEACTIVATION'];
+            const events = (rows || []).filter(r => lifecycleActions.includes(r.action)).slice(0, 40);
+            tbody.innerHTML = events.length === 0
+                ? '<tr><td colspan="3" style="text-align:center; color:#888;">No account lifecycle events yet.</td></tr>'
+                : events.map(r => `
+                    <tr>
+                        <td data-label="Timestamp">${escapeHtml(r.timestamp)}</td>
+                        <td data-label="Event"><span class="code-badge">${escapeHtml(r.action)}</span></td>
+                        <td data-label="Details">${escapeHtml(r.details || '')}</td>
+                    </tr>
+                `).join('');
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Audit feed unavailable.</td></tr>';
+        });
+}
+
+function userAccountAction(userId, action) {
+    fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            const messages = {
+                'deactivate': 'Account deactivated — everyday removal complete (reversible).',
+                'reactivate': 'Account reactivated.',
+                'force-unlock': 'Account unlocked — failed attempts cleared.',
+                'reset-password': `Temporary password: ${res.temp_password} — copy it and hand it to the employee.`,
+                'update-profile': 'Profile updated.'
+            };
+            showToast(messages[action] || 'Account updated.');
+            if (action === 'reset-password' && res.temp_password) {
+                copyTempPassword(res.temp_password, res.account_id);
+            }
+            loadSystemUsers();
+        } else {
+            showToast(res.error || 'Account action failed.', 'error');
+        }
+    })
+    .catch(() => showToast('Network error during account action.', 'error'));
+}
+
+// P4: every issued temporary password gets one-tap copy + toast clarity
+function copyTempPassword(tempPassword, accountId) {
+    const makeCopyBanner = () => {
+        showToast(`Account ${formatAccountCodeChip(accountId)} — temp password copied: ${tempPassword}`, 'warning');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(tempPassword).then(makeCopyBanner).catch(() => showToast(`Temp password for ${formatAccountCodeChip(accountId)}: ${tempPassword}`, 'warning'));
+    } else {
+        makeCopyBanner();
+    }
 }
 
 function handleChangePersonalPassword(e) {
@@ -2192,6 +2363,17 @@ function handleChangePersonalPassword(e) {
     const username = document.getElementById('my-username').value.trim();
     const currentPassword = document.getElementById('my-curr-pass').value;
     const newPassword = document.getElementById('my-new-pass').value;
+    const myRole = currentUser ? currentUser.role : 'Staff';
+    const minLen = ['Admin', 'Owner', 'Developer'].includes(myRole) ? 12 : 8;
+
+    if (newPassword && newPassword.length < minLen) {
+        showToast(`New password must be at least ${minLen} characters (letters, number, symbol).`, 'error');
+        return;
+    }
+    if (newPassword && !(/[a-zA-Z]/.test(newPassword) && /[0-9]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword))) {
+        showToast('New password must contain letters, a number, and a symbol.', 'error');
+        return;
+    }
 
     fetch('/api/admin/change-password', {
         method: 'POST',
@@ -2201,7 +2383,7 @@ function handleChangePersonalPassword(e) {
     .then(res => res.json())
     .then(res => {
         if (res.success) {
-            showToast('Credentials updated successfully!');
+            showToast(res.password_changed ? 'Password updated successfully (policy enforced)!' : 'Username updated successfully!');
             document.getElementById('my-curr-pass').value = '';
             document.getElementById('my-new-pass').value = '';
         } else {
@@ -2212,32 +2394,64 @@ function handleChangePersonalPassword(e) {
 
 function interceptCreateUserAccount(e) {
     e.preventDefault();
+    const fullname = document.getElementById('new-user-fullname').value.trim();
+    const username = document.getElementById('new-user-name').value.trim();
+    const position = document.getElementById('new-user-position').value;
+    const role = document.getElementById('new-user-role').value;
+    if (!fullname || fullname.length < 2) {
+        showToast('Employee full name is required.', 'error');
+        return;
+    }
+    if (!username || !/^[A-Za-z0-9_.]{3,24}$/.test(username)) {
+        showToast('Username must be 3-24 characters (letters, numbers, dot, underscore).', 'error');
+        return;
+    }
     openSecurityModal(() => {
-        handleCreateUserAccountAction();
+        handleCreateUserAccountAction(fullname, username, position, role);
     });
 }
 
-function handleCreateUserAccountAction() {
-    const username = document.getElementById('new-user-name').value.trim();
-    const password = document.getElementById('new-user-pass').value;
-    const role = document.getElementById('new-user-role').value;
-
+// P3/P4: the server auto-generates the temporary password; nobody types weak ones
+function handleCreateUserAccountAction(fullname, username, position, role) {
     fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role })
+        body: JSON.stringify({ full_name: fullname, username, position, role })
     })
     .then(res => res.json())
     .then(res => {
         if (res.success) {
-            showToast(`User account for ${username} created!`);
+            showToast(`Employee account created! Account code: ${formatAccountCodeChip(res.account_id)}`);
             document.getElementById('create-user-form').reset();
             loadSystemUsers();
+            showNewEmployeeCredentials(res);
         } else {
             showToast(res.error || 'Failed to create user account.', 'error');
         }
-    });
+    })
+    .catch(() => showToast('Network error while creating the account.', 'error'));
 }
+
+function showNewEmployeeCredentials(res) {
+    const box = document.getElementById('new-user-result');
+    if (!box) return;
+    box.style.display = 'block';
+    box.innerHTML = `
+        <h3 style="color:var(--primary); font-size:0.95rem; margin-bottom:6px;"><i class="fa-solid fa-id-badge"></i> Employee Card Ready — hand these to ${escapeHtml(res.full_name)}</h3>
+        <div><strong>Account Code:</strong> <span class="code-badge">${formatAccountCodeChip(res.account_id)}</span></div>
+        <div><strong>Login username:</strong> @${escapeHtml(res.username)} · <strong>Role:</strong> ${escapeHtml(res.role)}</div>
+        <div style="margin-top:6px;"><strong>Temporary Password:</strong> <span class="code-badge" id="tmp-pass-chip">${escapeHtml(res.temp_password)}</span></div>
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn-action" style="padding:5px 12px; font-size:0.8rem;" onclick="copyTempPassword('${escapeHtml(res.temp_password)}', '${escapeHtml(res.account_id)}')">
+                <i class="fa-solid fa-copy"></i> Copy Temp Password
+            </button>
+            <span style="font-size:0.78rem; color:#666;">The employee sets a personal password at first login.</span>
+        </div>
+    `;
+}
+window.showNewEmployeeCredentials = showNewEmployeeCredentials;
+window.copyTempPassword = copyTempPassword;
+window.userAccountAction = userAccountAction;
 
 function deleteUserAccount(id) {
     openSecurityModal(() => {
@@ -2266,51 +2480,55 @@ function selectBadge(value, btnElement) {
     document.getElementById('selected-badge-input').value = value;
 }
 
-// Toggle custom dropdown open/close state
+// Dropdown population helpers for dynamic option lists (Register-Container style).
+// Keeps every select in the system consistent: floating popover, hidden input, active highlight.
+function populateCustomDropdown(optionsEl, items, placeholderText, hiddenInputId) {
+    if (!optionsEl) return;
+    const parent = optionsEl.closest('.custom-dropdown');
+    optionsEl.innerHTML = items.map(it =>
+        `<div class="dropdown-option" data-value="${it.value}" onclick="selectCustomOption(this, this.dataset.value)">${escapeHtml(it.label)}</div>`
+    ).join('');
+    if (parent) {
+        parent.querySelector('.dropdown-selected-text').textContent = placeholderText;
+        parent.classList.remove('open');
+        parent.querySelectorAll('.dropdown-option').forEach(o => o.classList.remove('active'));
+    }
+    if (hiddenInputId) {
+        const hidden = document.getElementById(hiddenInputId);
+        if (hidden) hidden.value = '';
+    }
+}
+
+// Programmatically select an option inside a custom dropdown (used for edit-prefill)
+function setCustomDropdownValue(optionsEl, value) {
+    if (!optionsEl) return false;
+    const target = [...optionsEl.querySelectorAll('.dropdown-option')].find(o => String(o.dataset.value) === String(value));
+    if (!target) return false;
+    selectCustomOption(target, String(value));
+    return true;
+}
+
+// Toggle open/close state
 function toggleCustomDropdown(triggerEl) {
     const parent = triggerEl.closest('.custom-dropdown');
-    
+
     // Close any other open dropdowns first
     document.querySelectorAll('.custom-dropdown.open').forEach(dd => {
         if (dd !== parent) dd.classList.remove('open');
     });
-    
+
     parent.classList.toggle('open');
 }
 
-// Option selection handler
-function selectCustomOption(optionEl, value) {
-    const parent = optionEl.closest('.custom-dropdown');
-    
-    // Update displayed label
-    parent.querySelector('.dropdown-selected-text').textContent = optionEl.textContent;
-    
-    // Update hidden input for form submission
-    const hiddenInput = parent.querySelector('input[type="hidden"]');
-    if (hiddenInput) hiddenInput.value = value;
-    
-    // Update active highlight style
-    parent.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('active'));
-    optionEl.classList.add('active');
-    
-    // Close dropdown
-    parent.classList.remove('open');
-}
-
-// Close dropdowns when clicking outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.custom-dropdown')) {
-        document.querySelectorAll('.custom-dropdown.open').forEach(dd => dd.classList.remove('open'));
-    }
-});
-
-// Generic Custom Dropdown Option Handler
+// Option selection handler — same handler keeps every dropdown in the system uniform:
+// label copy, hidden-input value, active highlight, then close.
 function selectCustomOption(optionEl, value, hiddenInputId) {
     const parent = optionEl.closest('.custom-dropdown');
-    
+    if (!parent) return;
+
     // Update displayed title
     parent.querySelector('.dropdown-selected-text').textContent = optionEl.textContent;
-    
+
     // Set hidden input value
     if (hiddenInputId) {
         const input = document.getElementById(hiddenInputId);
@@ -2319,25 +2537,16 @@ function selectCustomOption(optionEl, value, hiddenInputId) {
         const hiddenInput = parent.querySelector('input[type="hidden"]');
         if (hiddenInput) hiddenInput.value = value;
     }
-    
+
     // Active class styling
     parent.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('active'));
     optionEl.classList.add('active');
-    
+
     // Close dropdown
     parent.classList.remove('open');
 }
 
-// Toggle Dropdown Menu
-function toggleCustomDropdown(triggerEl) {
-    const parent = triggerEl.closest('.custom-dropdown');
-    document.querySelectorAll('.custom-dropdown.open').forEach(dd => {
-        if (dd !== parent) dd.classList.remove('open');
-    });
-    parent.classList.toggle('open');
-}
-
-// Close Dropdowns on Outside Click
+// Close dropdowns when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.custom-dropdown')) {
         document.querySelectorAll('.custom-dropdown.open').forEach(dd => dd.classList.remove('open'));
@@ -2375,6 +2584,10 @@ function selectWasteReasonPill(val, btn) {
 function filterSpillageTypePill(val, btn) {
     updatePillSelection(btn, 'spillage-type-filter', val);
     if (typeof loadWastageLogs === 'function') loadWastageLogs();
+}
+
+function selectUserPositionPill(val, btn) {
+    updatePillSelection(btn, 'new-user-position', val);
 }
 
 function selectUserRolePill(val, btn) {
@@ -2615,6 +2828,45 @@ function reorderItem(id, direction, type = 'menu') {
    recipe links: "Smart Recipe Links" sub-tab. Closeout: "EOD Closeout & Smart
    Deductions" sub-tab.
    =========================================================================== */
+// PART 2: "whole container(s)" pill now mirrors each container's OWN unit type
+// (Bottles → "3 Bottles left", Pieces → "10 Pieces left") — uniform on desktop & mobile.
+function smartStockPillText(card) {
+    const unit = String(card.container_unit || 'units').trim();
+    return `${card.stock_quantity} ${escapeHtml(unit)} left`;
+}
+
+// Pieces support (supplier-made goods): unit-aware coaching inside the Quick Link modal.
+const SMART_UNIT_HINTS = {
+    g: {
+        usage: 'e.g. 20 (grams per serving)',
+        capacity: '(grams per whole container, e.g. coffee bag = 1000)',
+        hint: '<strong><i class="fa-solid fa-scale-balanced"></i> Weighed goods — coffee &amp; syrups.</strong> One serving uses e.g. 20 g; the coffee bag holds 1000 g. The engine deducts whole bags and carries the opened-bag grams digitally.'
+    },
+    ml: {
+        usage: 'e.g. 30 (ml per serving)',
+        capacity: '(ml per whole container, e.g. oat milk carton = 950)',
+        hint: '<strong><i class="fa-solid fa-scale-balanced"></i> Poured goods — milk &amp; creamer.</strong> One serving uses e.g. 30 ml; the carton holds 950 ml. The engine deducts whole cartons and carries the opened-carton ml digitally.'
+    },
+    pcs: {
+        usage: 'e.g. 1, 2 or 3 (pieces per serving)',
+        capacity: '(pieces per whole container, e.g. supplier box of bread = 10)',
+        hint: '<strong><i class="fa-solid fa-bread-slice"></i> Supplier-made pieces — whole bread.</strong> One serving uses 1–3 pieces. The supplier box holds e.g. 10 pieces — the engine deducts whole sealed boxes and carries the opened-box pieces digitally. Single loose pieces (no pack): enter 1.'
+    }
+};
+
+function syncSmartLinkUnitHint() {
+    const unitSel = document.getElementById('smart-link-unit');
+    const usageEl = document.getElementById('smart-link-usage');
+    const capEl = document.getElementById('smart-link-container-qty');
+    const hintEl = document.getElementById('smart-link-unit-hint');
+    if (!unitSel || !hintEl || !usageEl || !capEl) return;
+    const h = SMART_UNIT_HINTS[unitSel.value] || SMART_UNIT_HINTS.g;
+    if (hintEl) hintEl.innerHTML = h.hint;
+    // keep the original placeholder style (lowercase short example)
+    if (usageEl && !usageEl.value) usageEl.placeholder = h.usage.replace(/^\s*/, '');
+    if (capEl && !capEl.value) capEl.placeholder = h.capacity.replace(/[()]/g, '').split(',')[0].trim();
+}
+
 function loadSmartContainerCards() {
     Promise.all([
         fetch('/api/admin/inventory/container-cards').then(r => r.json()),
@@ -2622,19 +2874,19 @@ function loadSmartContainerCards() {
         fetch('/api/admin/inventory').then(r => r.json())
     ])
     .then(([cards, menuItems, inventoryItems]) => {
-        // cache for the link modal
-        window._smartMenuCache = menuItems || [];
-        window._smartInventoryCache = inventoryItems || [];
+        const cardsArray = Array.isArray(cards) ? cards : [];
+        window._smartMenuCache = Array.isArray(menuItems) ? menuItems : [];
+        window._smartInventoryCache = Array.isArray(inventoryItems) ? inventoryItems : [];
         window._smartLastRemainder = {};
-        (cards || []).forEach(c => { window._smartLastRemainder[c.inventory_item_id] = c.open_container_remaining || 0; });
+        cardsArray.forEach(c => { window._smartLastRemainder[c.inventory_item_id] = c.open_container_remaining || 0; });
 
         const wrap = document.getElementById('smart-container-cards');
         if (!wrap) return;
-        if (!cards || !cards.length) {
+        if (!cardsArray.length) {
             wrap.innerHTML = '<div style="padding:20px;color:#666;">No bulk containers registered yet.</div>';
             return;
         }
-        wrap.innerHTML = cards.map(card => {
+        wrap.innerHTML = cardsArray.map(card => {
             const menuRows = card.menu_items.length
                 ? card.menu_items.map(mi => `
                     <div class="smart-menu-row">
@@ -2663,7 +2915,7 @@ function loadSmartContainerCards() {
                             <span style="font-size:0.85rem;color:#666;">Unit: ${escapeHtml(card.container_unit)} &middot; Threshold: ${card.safety_threshold}</span>
                         </div>
                         <div class="smart-stock-pill ${low ? 'low' : ''}">
-                            ${card.stock_quantity} whole container(s)
+                            ${smartStockPillText(card)}
                         </div>
                     </div>
                     <div style="margin: 10px 0;">${openedText}</div>
@@ -2679,18 +2931,28 @@ function loadSmartContainerCards() {
 
 // Quick Link Modal: optionally pre-select (and highlight) the container chosen from the card
 function openSmartLinkModal(preselectInventoryId) {
-    const menuSel = document.getElementById('smart-link-menu');
-    const invSel = document.getElementById('smart-link-inventory');
-    menuSel.innerHTML = (window._smartMenuCache || []).map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
-    invSel.innerHTML = (window._smartInventoryCache || []).map(i => `<option value="${i.id}">${escapeHtml(i.item_name)} (${escapeHtml(i.container_unit)})</option>`).join('');
+    populateCustomDropdown(
+        document.getElementById('smart-link-menu-options'),
+        (window._smartMenuCache || []).map(m => ({ value: m.id, label: m.name })),
+        '-- Select Menu Item --',
+        'smart-link-menu'
+    );
+    populateCustomDropdown(
+        document.getElementById('smart-link-inventory-options'),
+        (window._smartInventoryCache || []).map(i => ({ value: i.id, label: `${i.item_name} (${i.container_unit})` })),
+        '-- Select Bulk Container Item --',
+        'smart-link-inventory'
+    );
     ['smart-link-usage', 'smart-link-container-qty'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('smart-link-usage').dataset.recipeId = '';
     document.getElementById('smart-link-usage').dataset.oldInventoryId = '';
     document.getElementById('smart-link-usage').dataset.oldMenuId = '';
     if (preselectInventoryId) {
-        const exists = [...invSel.options].some(o => parseInt(o.value, 10) === parseInt(preselectInventoryId, 10));
-        if (exists) invSel.value = String(preselectInventoryId);
+        setCustomDropdownValue(document.getElementById('smart-link-inventory-options'), String(preselectInventoryId));
     }
+    // fresh modal always starts at the default unit (grams)
+    setCustomDropdownValue(document.getElementById('smart-link-unit-options'), 'g');
+    syncSmartLinkUnitHint();
     document.getElementById('smart-link-modal').style.display = 'flex';
 }
 
@@ -2700,13 +2962,17 @@ function closeSmartLinkModal() {
 
 function editSmartRecipe(recipeId, data) {
     openSmartLinkModal();
-    document.getElementById('smart-link-menu').value = data.menu_item_id;
-    const invSel = document.getElementById('smart-link-inventory');
-    const exists = [...invSel.options].some(o => parseInt(o.value, 10) === parseInt(data.inventory_item_id, 10));
-    invSel.value = exists ? data.inventory_item_id : invSel.options[0].value;
+    // custom dropdowns: pre-select + highlight the exact menu item, container, and unit
+    setCustomDropdownValue(document.getElementById('smart-link-menu-options'), data.menu_item_id);
+    if (!setCustomDropdownValue(document.getElementById('smart-link-inventory-options'), data.inventory_item_id)) {
+        // fallback to the first container if the linked one vanished (same behavior as before)
+        const firstOption = document.querySelector('#smart-link-inventory-options .dropdown-option');
+        if (firstOption) selectCustomOption(firstOption, firstOption.dataset.value);
+    }
     document.getElementById('smart-link-usage').value = data.usage_per_serving;
-    document.getElementById('smart-link-unit').value = data.usage_unit;
+    setCustomDropdownValue(document.getElementById('smart-link-unit-options'), data.usage_unit);
     document.getElementById('smart-link-container-qty').value = data.container_quantity;
+    syncSmartLinkUnitHint();
     // remember recipe id so submit deletes the old link if the container choice changed, then upserts
     document.getElementById('smart-link-usage').dataset.recipeId = recipeId;
     document.getElementById('smart-link-usage').dataset.oldInventoryId = data.inventory_item_id;

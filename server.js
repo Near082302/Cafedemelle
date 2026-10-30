@@ -27,6 +27,11 @@ if (!process.env.SESSION_SECRET) {
 // AES-256-GCM Cryptographic Key Configuration for PII Encryption (RA 10173 Compliance)
 const ALGORITHM = 'aes-256-gcm';
 const ENCRYPTION_KEY_RAW = process.env.ENCRYPTION_KEY || 'a6f3e18b9c4d2e7f8a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f';
+if (!process.env.ENCRYPTION_KEY) {
+    // SECURITY PLAN P6: the repo fallback must NEVER be used in production. It only
+    // keeps local dev boots from crashing while encrypted legacy rows still exist.
+    console.warn('🚨 SECURITY: ENCRYPTION_KEY environment variable is not set — falling back to the legacy repo key. Set ENCRYPTION_KEY in Render/deployment env immediately.');
+}
 const SECRET_KEY = Buffer.from(ENCRYPTION_KEY_RAW, 'hex');
 
 const app = express();
@@ -260,14 +265,27 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    // SECURITY PLAN P6: rolling session + HTTPS-only cookie in production
+    rolling: true,
     name: '_cdm_sid',
     cookie: {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 4 * 60 * 60 * 1000
     }
 }));
+
+// SECURITY PLAN P6: global API rate limiter guarding every /api route
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { trustProxy: false },
+    message: { success: false, error: 'Too many requests. Please slow down and try again later.' }
+});
+app.use('/api', apiLimiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -544,13 +562,13 @@ function initDatabaseSchema() {
                 if (!colNames.includes('role')) {
                     db.run(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Staff'`, () => {
                         console.log("🛠️ Migrated DB: Added 'role' column to users table.");
-                        seedDefaultAccounts();
+                        migrateUsersSchemaV2();
                     });
                 } else {
-                    seedDefaultAccounts();
+                    migrateUsersSchemaV2();
                 }
             } else {
-                seedDefaultAccounts();
+                migrateUsersSchemaV2();
             }
         });
 
@@ -572,30 +590,211 @@ function initDatabaseSchema() {
     });
 }
 
+/* ===========================================================================
+   PART 3 — SECURITY PLAN: EMPLOYEE PROFILE SCHEMA V2 (non-destructive migration)
+   Adds employee identity + lockout/audit columns to `users` via ALTER TABLE.
+   Column additions use the same safe pattern as existing migrations.
+   =========================================================================== */
+const USERS_SCHEMA_V2_COLUMNS = [
+    ['full_name', 'TEXT'],
+    ['position', 'TEXT'],
+    ['account_code', 'TEXT'],
+    ['must_change_password', 'INTEGER DEFAULT 0'],
+    ['failed_attempts', 'INTEGER DEFAULT 0'],
+    ['locked_until', 'DATETIME'],
+    ['last_login', 'DATETIME'],
+    ['is_active', 'INTEGER DEFAULT 1'],
+    ['created_by', 'TEXT'],
+    ['updated_at', 'DATETIME']
+];
+
+function migrateUsersSchemaV2() {
+    db.all(`PRAGMA table_info(users)`, [], (err, columns) => {
+        if (err || !columns || columns.length === 0) return seedDefaultAccounts();
+        const colNames = columns.map(c => c.name);
+        const missing = USERS_SCHEMA_V2_COLUMNS.filter(([name]) => !colNames.includes(name));
+
+        let remaining = missing.length;
+        if (remaining === 0) {
+            return backfillEmployeeAccounts();
+        }
+        missing.forEach(([name, decl]) => {
+            db.run(`ALTER TABLE users ADD COLUMN ${name} ${decl}`, () => {
+                console.log(`🛠️ Migrated DB (SECURITY PLAN P1): Added '${name}' column to users table.`);
+                remaining--;
+                if (remaining === 0) backfillEmployeeAccounts();
+            });
+        });
+    });
+}
+
+// ONE-TIME BACKFILL: accounts that predate the security plan receive their permanent
+// 9-digit account code plus a freshly generated temporary password (bcrypt cost 12).
+// Owners find the codes + temp passwords in account-access-codes.md at repo root and
+// must log in once (password change enforced on first login). Runs only when rows are
+// still missing account codes, so it never resets passwords again after day one.
+function backfillEmployeeAccounts() {
+    db.all(`SELECT id, username, role, full_name FROM users WHERE account_code IS NULL OR account_code = ''`, [], (err, rows) => {
+        if (err) {
+            console.error('⚠️ users backfill failed:', err.message);
+            return seedDefaultAccounts();
+        }
+        if (!rows || rows.length === 0) {
+            db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_code ON users(account_code)`, [], () => seedDefaultAccounts());
+            return;
+        }
+
+        const recovered = [];
+        db.serialize(() => {
+            db.run(`BEGIN TRANSACTION`);
+            const stmt = db.prepare(`
+                UPDATE users
+                SET account_code = ?,
+                    password_hash = ?,
+                    must_change_password = 1,
+                    is_active = COALESCE(is_active, 1),
+                    failed_attempts = 0,
+                    locked_until = NULL,
+                    full_name = COALESCE(full_name, ?),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `);
+            rows.forEach(row => {
+                const tempPassword = generateTemporaryPassword(['Admin', 'Owner', 'Developer'].includes(row.role) ? 14 : 10);
+                stmt.run(
+                    format9DigitAccountId(row.id, row.role),
+                    bcrypt.hashSync(tempPassword, 12),
+                    row.username,
+                    row.id
+                );
+                recovered.push({
+                    username: row.username,
+                    role: row.role,
+                    account_code: format9DigitAccountId(row.id, row.role),
+                    display_name: row.full_name || row.username,
+                    temp_password: tempPassword
+                });
+            });
+            stmt.finalize(() => {
+                db.run(`COMMIT`, () => {
+                    logAudit('ACCOUNT_SCHEMA_V2', `Security plan P1 backfill: issued permanent account codes + temporary passwords for ${recovered.length} existing account(s); owners must change them at first login. Credentials stored in account-access-codes.md (never logged to console).`, 'System Guard');
+                    writeAccountAccessCodesFile(recovered);
+                    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_code ON users(account_code)`, [], () => seedDefaultAccounts());
+                });
+            });
+        });
+    });
+}
+
+function writeAccountAccessCodesFile(entries) {
+    if (!entries || entries.length === 0) return;
+    const lines = [
+        '# Cafe de Melle — Account Access Codes (Owner Only)',
+        '',
+        `> Generated automatically on first boot of the Security Plan (P1/P3) — ${new Date().toISOString()}`,
+        '> TEMPORARY passwords: each account is forced to set a new password at first login.',
+        '> Keep this file LOCAL — it is git-ignored and must never be committed or shared.',
+        '',
+        '| Account Code | Username | Employee / Display Name? | Role | Temporary Password |',
+        '|---|---|---|---|---|'
+    ];
+    entries.forEach(e => {
+        // escape pipes and avoid breaking the markdown table
+        const safe = s => String(s || '').replace(/\|/g, '/');
+        lines.push(`| ${e.account_code} | ${safe(e.username)} | ${safe(e.display_name)} | ${safe(e.role)} | \`${e.temp_password}\` |`);
+    });
+    lines.push('', 'Login flow: open the login page → enter the Account Code (or username) → Continue → enter the temporary password → set your new password → you land in the admin panel.');
+    const filePath = path.join(__dirname, 'account-access-codes.md');
+    try {
+        fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+        console.log(`🔐 Employee access codes + temporary passwords written to: ${path.basename(filePath)} (owner reference only)`);
+    } catch (e) {
+        console.error('⚠️ Could not write account access file:', e.message);
+    }
+}
+
+// Cryptographically random temporary password that satisfies the house policy:
+// letters + digit + symbol, never reused, printed nowhere.
+function generateTemporaryPassword(minLength = 10) {
+    const length = Math.max(minLength, 10);
+    const lower = 'abcdefghijkmnopqrstuvwxyz';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const digits = '23456789';
+    const symbols = '!@#$%^&*';
+    const all = lower + upper + digits + symbols;
+    const bytes = crypto.randomBytes(Math.max(length, 4));
+    let pw = Array.from(bytes).map(b => all[b % all.length]).join('');
+    const guarantee = [
+        lower[crypto.randomInt(lower.length)],
+        upper[crypto.randomInt(upper.length)],
+        digits[crypto.randomInt(digits.length)],
+        symbols[crypto.randomInt(symbols.length)]
+    ].join('');
+    return guarantee + pw.slice(4);
+}
+
+// Password policy (P6): min 8 chars staff, min 12 Admin/Owner/Developer; letters AND
+// digits AND a symbol. Enforced on create/change — never on login.
+function validatePasswordPolicy(password, role) {
+    const isPrivileged = ['Admin', 'Owner', 'Developer'].includes(role);
+    const minLength = isPrivileged ? 12 : 8;
+    if (typeof password !== 'string' || password.length < minLength) {
+        return `Password must be at least ${minLength} characters for ${role} accounts.`;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password) || !/[^a-zA-Z0-9]/.test(password)) {
+        return 'Password must contain letters, a number, and a symbol.';
+    }
+    return null;
+}
+
 function seedDefaultAccounts() {
     const defaultAdminUser = process.env.ADMIN_USERNAME || 'admin';
-    const defaultAdminPass = process.env.ADMIN_PASSWORD || 'admin123';
 
+    const createAccount = (username, role, plaintextOrTemp, fromEnv) => {
+        const hash = bcrypt.hashSync(plaintextOrTemp, 12);
+        db.serialize(() => {
+            db.run(`INSERT INTO users (username, password_hash, role, full_name, position, must_change_password, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, 1, 'Account Seed')`,
+                [username, hash, role, username === 'developer' ? 'System Developer' : (username === 'owner' ? 'Business Owner' : 'Cafe Manager'), role === 'Owner' ? 'Owner' : (role === 'Developer' ? 'System' : 'Manager')],
+                function(err) {
+                    if (!err && this.lastID) {
+                        const code = format9DigitAccountId(this.lastID, role);
+                        db.run(`UPDATE users SET account_code = ? WHERE id = ?`, [code, this.lastID]);
+                        logAudit('ACCOUNT_SEEDED', `Seeded '${username}' [Role: ${role}, ID: ${code}] on first boot. Temporary password issued${fromEnv ? ' from environment settings' : ' by system generator'}; change required at first login.`, 'System Guard');
+                        if (!fromEnv) {
+                            // Never print the password; hand it to the owner via the local file.
+                            writeAccountAccessCodesFile([{ username, role, account_code: code, display_name: role === 'Owner' ? 'Business Owner' : (role === 'Developer' ? 'System Developer' : 'Cafe Manager'), temp_password: plaintextOrTemp }]);
+                        }
+                    }
+                });
+        });
+    };
+
+    // ADMIN: username/password environment-only (P6). No repo fallback passwords.
     db.get(`SELECT * FROM users WHERE username = ?`, [defaultAdminUser], (err, row) => {
+        if (err) return;
         if (!row) {
-            const hash = bcrypt.hashSync(defaultAdminPass, 10);
-            db.run(`INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'Admin')`, [defaultAdminUser, hash]);
+            if (process.env.ADMIN_PASSWORD) {
+                createAccount(defaultAdminUser, 'Admin', process.env.ADMIN_PASSWORD, true);
+            } else {
+                createAccount(defaultAdminUser, 'Admin', generateTemporaryPassword(14), false);
+            }
             console.log(`🔒 Default Admin account initialized: ${defaultAdminUser}`);
         }
     });
 
+    // DEVELOPER + OWNER: no hardcoded repo passwords — generated secrets only.
     db.get(`SELECT * FROM users WHERE username = 'developer'`, (err, row) => {
+        if (err) return;
         if (!row) {
-            const devHash = bcrypt.hashSync('DevSecure2026!', 10);
-            db.run(`INSERT INTO users (username, password_hash, role) VALUES ('developer', ?, 'Developer')`, [devHash]);
+            createAccount('developer', 'Developer', generateTemporaryPassword(14), false);
             console.log(`🔒 Developer account initialized: developer`);
         }
     });
 
     db.get(`SELECT * FROM users WHERE username = 'owner'`, (err, row) => {
+        if (err) return;
         if (!row) {
-            const ownerHash = bcrypt.hashSync('OwnerCafe2026!', 10);
-            db.run(`INSERT INTO users (username, password_hash, role) VALUES ('owner', ?, 'Owner')`, [ownerHash]);
+            createAccount('owner', 'Owner', generateTemporaryPassword(14), false);
             console.log(`🔒 Owner account initialized: owner`);
         }
     });
@@ -605,10 +804,28 @@ function seedDefaultAccounts() {
    6. HELPER FUNCTIONS & MIDDLEWARE GUARDS
    =========================================================================== */
 function requireAuth(req, res, next) {
-    if (req.session && req.session.isAdmin) {
-        return next();
+    if (!req.session || !req.session.isAdmin) {
+        return res.status(401).json({ success: false, error: 'Unauthorized access. Please log in.' });
     }
-    return res.status(401).json({ success: false, error: 'Unauthorized access. Please log in.' });
+    // SECURITY PLAN P6: live account-state check — deactivation and role changes take
+    // effect immediately on the very next request (no session grants for dead accounts).
+    db.get(`SELECT is_active, role, username FROM users WHERE id = ?`, [req.session.userId], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ success: false, error: 'Unauthorized access. Please log in.' });
+        }
+        if (!user.is_active) {
+            const performer = `${user.username} (deactivated)`;
+            req.session.destroy(() => {});
+            logAudit('SESSION_KILLED_BY_DEACTIVATION', `Session terminated for '${user.username}' — account is deactivated.`, performer);
+            return res.status(401).json({ success: false, error: 'Account deactivated by management. Please ask your manager for help.' });
+        }
+        if (user.role !== req.session.role) {
+            // don't let a stale cached role grant higher permissions after a role change
+            req.session.role = user.role;
+            req.session.username = user.username;
+        }
+        return next();
+    });
 }
 
 function requireDeveloperOnly(req, res, next) {
@@ -629,7 +846,16 @@ function requireNonStaff(req, res, next) {
     if (req.session && req.session.isAdmin && (req.session.role === 'Developer' || req.session.role === 'Owner' || req.session.role === 'Admin')) {
         return next();
     }
-    return res.status(403).json({ success: false, error: 'Access denied. Staff role cannot alter user account configurations.' });
+    return res.status(403).json({ success: false, error: 'Access denied. Staff role cannot perform this management action.' });
+}
+
+// SECURITY PLAN P4/P5: permission ladder for managing OTHER accounts.
+// Admin → Staff only · Owner → Staff + Admin · Developer → everything.
+function requesterCanManage(requesterRole, targetRole) {
+    if (requesterRole === 'Developer') return true;
+    if (requesterRole === 'Owner') return targetRole === 'Staff' || targetRole === 'Admin';
+    if (requesterRole === 'Admin') return targetRole === 'Staff';
+    return false;
 }
 
 function getActiveUser(req) {
@@ -805,42 +1031,286 @@ app.post('/api/visits', (req, res) => {
    8. ADMIN & AUTHENTICATED REST API ENDPOINTS
    =========================================================================== */
 
-app.post('/api/admin/login', loginLimiter, (req, res) => {
-    const { username, password } = req.body;
+/* ===========================================================================
+   8. ADMIN & AUTHENTICATED REST API ENDPOINTS
+   AUTH FLOW (SECURITY PLAN P2/P3): two-step bank-style login.
+   Step 1: identify by 9-digit account code OR username.
+   Step 2: password with per-account lockout (5 fails → 15 min) + session fixation fix.
+   Step 3: forced password change for accounts flagged must_change_password — those
+   users get a NON-ADMIN pending session until they actually set a new password.
+   =========================================================================== */
 
-    if (!username || !password) {
-        return res.status(400).json({ success: false, error: 'Username and password are required.' });
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCK_MINUTES = 15;
+
+// Shared lookup: 9-digit account code or username (case-insensitive)
+function findLoginUser(handle, cb) {
+    const digitsOnly = String(handle || '').replace(/\D/g, '');
+    db.get(
+        `SELECT * FROM users WHERE username = ? COLLATE NOCASE OR (account_code IS NOT NULL AND account_code = ?)`,
+        [String(handle || '').trim(), digitsOnly && digitsOnly.length >= 9 ? digitsOnly : '___none___'],
+        (err, user) => cb(err, user || null)
+    );
+}
+
+function lockRemainingMs(user) {
+    if (!user || !user.locked_until) return 0;
+    const until = new Date(user.locked_until + (user.locked_until.includes('Z') ? '' : 'Z')).getTime();
+    let ms = until - Date.now();
+    if (Number.isNaN(ms)) {
+        // DATETIME stored as "YYYY-MM-DD HH:MM:SS" (UTC by SQLite convention)
+        const parts = user.locked_until.split(/[- :]/);
+        if (parts.length >= 6) {
+            const asUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5]));
+            ms = asUTC.getTime() - Date.now();
+        }
+    }
+    return Math.max(0, ms);
+}
+
+app.post('/api/admin/login/identify', loginLimiter, (req, res) => {
+    const handle = String(req.body.handle || req.body.username || '').trim();
+    if (!handle) {
+        return res.status(400).json({ success: false, error: 'Please enter your account code or username.' });
     }
 
-    db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, user) => {
+    findLoginUser(handle, (err, user) => {
+        // Never confirm existence to strangers — one generic answer for unknown handles
         if (err || !user) {
-            logAudit('USER_LOGIN_FAILED', `Failed login attempt for username: ${username}`, 'System Guard');
-            return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+            logAudit('LOGIN_IDENTIFIED', `Failed identify attempt: no active account matched the provided handle.`, 'System Guard');
+            return res.status(404).json({ success: false, state: 'unknown', error: 'No matching account found. Check your account code with your manager.' });
         }
 
-        const isValid = bcrypt.compareSync(password, user.password_hash);
-        if (!isValid) {
-            logAudit('USER_LOGIN_FAILED', `Failed login attempt for username: ${username}`, 'System Guard');
-            return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+        if (!user.is_active) {
+            return res.status(403).json({
+                success: false,
+                state: 'inactive',
+                error: 'This account has been deactivated by management. Please ask your manager.'
+            });
         }
 
-        req.session.isAdmin = true;
-        req.session.userId = user.id;
-        req.session.username = user.username;
-        req.session.role = user.role || 'Staff';
+        const lockedMs = lockRemainingMs(user);
+        if (lockedMs > 0) {
+            const mins = Math.ceil(lockedMs / 60000);
+            return res.status(403).json({
+                success: false,
+                state: 'locked',
+                error: `Account locked after too many attempts. Try again in ~${mins} minute(s) or ask a manager to unlock it.`
+            });
+        }
 
-        const userAccountCode = format9DigitAccountId(user.id, user.role);
+        // Employee card for the verify step (privacy: only needed basics)
+        const fullName = user.full_name || user.username;
+        const nameParts = String(fullName).trim().split(/\s+/);
+        const displayParts = nameParts.map((p, i) => (i === 0 ? p : (p.charAt(0) + '.')));
+        const initials = nameParts.slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('');
+        const digits = format9DigitAccountId(user.id, user.role);
+        const formattedCode = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}`;
 
-        logAudit('USER_LOGIN', `User '${user.username}' [Role: ${user.role}, ID: ${userAccountCode}] logged in successfully.`, `${user.username} (${user.role})`);
+        logAudit('LOGIN_IDENTIFIED', `Employee identified at step 1: '${user.username}' [Role: ${user.role}]`, 'System Guard');
 
         res.json({
             success: true,
-            user: {
-                id: user.id,
-                account_id: userAccountCode,
-                username: user.username,
-                role: user.role
+            state: 'identify-ok',
+            employee: {
+                handle: handle,
+                display_name: displayParts.join(' '),
+                full_name: fullName,
+                initials: initials,
+                position: user.position || 'Team Member',
+                role: user.role,
+                account_code_masked: `${digits.slice(0, 3)}-•••-${digits.slice(6, 9)}`,
+                formatted_account_code: formattedCode,
+                min_password_length: ['Admin', 'Owner', 'Developer'].includes(user.role) ? 12 : 8
             }
+        });
+    });
+});
+
+app.post('/api/admin/login', loginLimiter, (req, res) => {
+    const handle = String(req.body.handle || req.body.username || '').trim();
+    const password = String(req.body.password || '');
+
+    if (!handle || !password) {
+        return res.status(400).json({ success: false, error: 'Account code/username and password are required.' });
+    }
+
+    findLoginUser(handle, (err, user) => {
+        if (err || !user) {
+            logAudit('USER_LOGIN_FAILED', `Failed login attempt for handle: ${handle.slice(0, 24)}`, 'System Guard');
+            return res.status(401).json({ success: false, state: 'invalid', error: 'Invalid credentials.' });
+        }
+
+        if (!user.is_active) {
+            logAudit('USER_LOGIN_BLOCKED', `Login blocked — inactive account '${user.username}'`, 'System Guard');
+            return res.status(403).json({ success: false, state: 'inactive', error: 'This account has been deactivated by management.' });
+        }
+
+        const lockedMs = lockRemainingMs(user);
+        if (lockedMs > 0) {
+            const mins = Math.ceil(lockedMs / 60000);
+            return res.status(403).json({
+                success: false,
+                state: 'locked',
+                error: `Account is locked after too many failed attempts. Try again in ~${mins} minute(s) or ask a manager to unlock it.`,
+                locked_until: user.locked_until
+            });
+        }
+
+        const passwordValid = bcrypt.compareSync(password, user.password_hash);
+        if (!passwordValid) {
+            const attemptsUsed = (user.failed_attempts || 0) + 1;
+            if (attemptsUsed >= LOGIN_MAX_ATTEMPTS) {
+                db.run(`UPDATE users SET failed_attempts = 0, locked_until = DATETIME('now', ?) WHERE id = ?`, [`+${LOGIN_LOCK_MINUTES} minutes`, user.id], (err) => {
+                    if (err) console.error('Lockout write error:', err.message);
+                });
+                logAudit('LOCKOUT_TRIGGERED', `Account '${user.username}' locked for ${LOGIN_LOCK_MINUTES} minutes after ${attemptsUsed} failed login attempts.`, 'System Guard');
+                return res.status(401).json({
+                    success: false,
+                    state: 'locked',
+                    error: `Too many failed attempts. Account locked for ${LOGIN_LOCK_MINUTES} minutes — ask a manager to unlock it.`
+                });
+            }
+
+            db.run(`UPDATE users SET failed_attempts = ? WHERE id = ?`, [attemptsUsed, user.id], () => {});
+            logAudit('USER_LOGIN_FAILED', `Failed login attempt for '${user.username}' (attempt ${attemptsUsed}/${LOGIN_MAX_ATTEMPTS})`, 'System Guard');
+            const remaining = LOGIN_MAX_ATTEMPTS - attemptsUsed;
+            return res.status(401).json({
+                success: false,
+                state: 'invalid',
+                error: remaining > 0
+                    ? `Incorrect password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before a 15-minute lock.`
+                    : 'Too many failed attempts. Account locked for 15 minutes — ask a manager to unlock it.',
+                attempts_remaining: remaining
+            });
+        }
+
+        // Success: transparently upgrade legacy cost-10 hashes to cost 12 (P6)
+        const costMatch = /\$2[aby]\$(\d{2})\$/.exec(user.password_hash);
+        if (costMatch && parseInt(costMatch[1], 10) < 12) {
+            db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [bcrypt.hashSync(password, 12), user.id], () => {});
+        }
+
+        db.run(`UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [user.id], () => {});
+
+        const fullName = user.full_name || user.username;
+        const digits = format9DigitAccountId(user.id, user.role);
+
+        // SECURITY PLAN P3: session regenerated on login (kills fixation risk)
+        req.session.regenerate(() => {
+            logAudit('USER_LOGIN', `User '${user.username}' [Role: ${user.role}, ID: ${digits}] logged in successfully.`, `${user.username} (${user.role})`);
+
+            db.get(`SELECT must_change_password FROM users WHERE id = ?`, [user.id], (err2, fresh) => {
+                const mustChange = !!(fresh && fresh.must_change_password);
+
+                if (mustChange) {
+                    // Pending session: NOT admin-authenticated until the password change completes
+                    req.session.pendingUserId = user.id;
+                    req.session.pendingUsername = user.username;
+                    req.session.pendingRole = user.role || 'Staff';
+                    return res.json({
+                        success: true,
+                        must_change_password: true,
+                        user: {
+                            id: user.id,
+                            account_id: digits,
+                            username: user.username,
+                            role: user.role,
+                            full_name: fullName
+                        }
+                    });
+                }
+
+                req.session.isAdmin = true;
+                req.session.userId = user.id;
+                req.session.username = user.username;
+                req.session.role = user.role || 'Staff';
+                req.session.accountId = digits;
+                req.session.fullName = fullName;
+                req.session.position = user.position || null;
+                return res.json({
+                    success: true,
+                    user: {
+                        id: user.id,
+                        account_id: digits,
+                        username: user.username,
+                        role: user.role,
+                        full_name: fullName,
+                        position: user.position || null
+                    }
+                });
+            });
+        });
+    });
+});
+
+// Forced password change — pending-session step 3 (no bypass: no admin session exists yet)
+app.get('/api/admin/pending-session', (req, res) => {
+    if (!req.session || !req.session.pendingUserId) {
+        return res.json({ success: true, pending: false });
+    }
+    db.get(`SELECT * FROM users WHERE id = ?`, [req.session.pendingUserId], (err, user) => {
+        if (err || !user || !user.must_change_password || !user.is_active) {
+            // Change already done elsewhere / account dirty state — clear pending session
+            req.session.destroy(() => {});
+            return res.json({ success: true, pending: false });
+        }
+        const digits = format9DigitAccountId(user.id, user.role);
+        const fullName = user.full_name || user.username;
+        res.json({
+            success: true,
+            pending: true,
+            employee: {
+                id: user.id,
+                account_id: digits,
+                username: user.username,
+                role: user.role,
+                full_name: fullName,
+                position: user.position || 'Team Member',
+                initials: fullName.trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join(''),
+                min_password_length: ['Admin', 'Owner', 'Developer'].includes(user.role) ? 12 : 8
+            }
+        });
+    });
+});
+
+app.post('/api/admin/login/complete-change', loginLimiter, (req, res) => {
+    if (!req.session || !req.session.pendingUserId) {
+        return res.status(401).json({ success: false, error: 'No pending password change. Please start a fresh login.' });
+    }
+    const userId = req.session.pendingUserId;
+    const newPassword = String(req.body.new_password || '');
+    db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
+        if (err || !user || !user.is_active) {
+            req.session.destroy(() => {});
+            return res.status(404).json({ success: false, error: 'Pending account not found. Please log in again.' });
+        }
+        const policyError = validatePasswordPolicy(newPassword, user.role || 'Staff');
+        if (policyError) {
+            return res.status(400).json({ success: false, error: policyError });
+        }
+
+        db.run(`UPDATE users SET password_hash = ?, must_change_password = 0, failed_attempts = 0, locked_until = NULL, last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [bcrypt.hashSync(newPassword, 12), userId], (err2) => {
+            if (err2) return res.status(500).json({ success: false, error: err2.message });
+
+            const digits = format9DigitAccountId(userId, user.role);
+            logAudit('PASSWORD_FORCED_CHANGE_DONE', `'${user.username}' completed the mandatory first-login password change.`, `${user.username} (${user.role})`);
+
+            // Upgrade pending session → full admin session (new session id)
+            req.session.regenerate(() => {
+                req.session.isAdmin = true;
+                req.session.userId = user.id;
+                req.session.username = user.username;
+                req.session.role = user.role || 'Staff';
+                req.session.accountId = digits;
+                req.session.fullName = user.full_name || user.username;
+                req.session.position = user.position || null;
+                logAudit('USER_LOGIN', `User '${user.username}' [Role: ${user.role}, ID: ${digits}] logged in successfully (first-login change).`, `${user.username} (${user.role})`);
+                res.json({
+                    success: true,
+                    user: { id: user.id, account_id: digits, username: user.username, role: user.role, full_name: user.full_name || user.username }
+                });
+            });
         });
     });
 });
@@ -854,12 +1324,22 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 app.get('/api/admin/me', requireAuth, (req, res) => {
-    const accountCode = format9DigitAccountId(req.session.userId, req.session.role);
-    res.json({
-        id: req.session.userId,
-        account_id: accountCode,
-        username: req.session.username,
-        role: req.session.role
+    db.get(`SELECT id, username, role, full_name, position, account_code, must_change_password, is_active, last_login FROM users WHERE id = ?`, [req.session.userId], (err, user) => {
+        if (err || !user || !user.is_active) {
+            req.session.destroy(() => {});
+            return res.status(401).json({ success: false, error: 'Unauthorized access. Please log in.' });
+        }
+        const digits = user.account_code || format9DigitAccountId(user.id, user.role);
+        res.json({
+            id: user.id,
+            account_id: digits,
+            username: user.username,
+            role: user.role,
+            full_name: user.full_name || user.username,
+            position: user.position || null,
+            must_change_password: !!user.must_change_password,
+            last_login: user.last_login || null
+        });
     });
 });
 
@@ -947,59 +1427,191 @@ app.get('/api/admin/dashboard-kpis', requireAuth, (req, res) => {
     });
 });
 
-app.get('/api/admin/users', requireAuth, (req, res) => {
-    db.all(`SELECT id, username, role FROM users ORDER BY id ASC`, [], (err, rows) => {
+app.get('/api/admin/users', requireAuth, requireNonStaff, (req, res) => {
+    db.all(`SELECT id, username, role, full_name, position, account_code, must_change_password, failed_attempts, locked_until, last_login, is_active, created_by FROM users ORDER BY id ASC`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        const formattedUsers = rows.map(u => ({
-            id: u.id,
-            account_id: format9DigitAccountId(u.id, u.role),
-            username: u.username,
-            role: u.role
-        }));
+        const formattedUsers = rows.map(u => {
+            const lockedMs = lockRemainingMs(u);
+            let status = 'active';
+            if (!u.is_active) status = 'inactive';
+            else if (lockedMs > 0) status = 'locked';
+            else if (u.must_change_password) status = 'temp_password';
+            return {
+                id: u.id,
+                account_id: u.account_code || format9DigitAccountId(u.id, u.role),
+                username: u.username,
+                role: u.role,
+                full_name: u.full_name || u.username,
+                position: u.position || null,
+                status: status,
+                must_change_password: !!u.must_change_password,
+                locked_until: lockedMs > 0 ? u.locked_until : null,
+                last_login: u.last_login || null,
+                created_by: u.created_by || null,
+                is_active: !!u.is_active
+            };
+        });
         res.json(formattedUsers);
     });
 });
 
+const EMPLOYEE_POSITIONS = ['Barista', 'Cashier', 'Barista-Cashier', 'Kitchen', 'Supervisor'];
+
 app.post('/api/admin/users', requireAuth, requireNonStaff, (req, res) => {
-    const { username, password, role } = req.body;
+    const { username, full_name, position, role } = req.body;
     const performer = getActiveUser(req);
-
-    if (!username || !password) {
-        return res.status(400).json({ success: false, error: 'Username and password are required.' });
-    }
-
-    const assignedRole = role || 'Staff';
     const requesterRole = req.session.role;
 
-    if (requesterRole === 'Staff') {
-        return res.status(403).json({ success: false, error: 'Staff members have no permission to manage accounts.' });
+    if (!username || !/^[A-Za-z0-9_.]{3,24}$/.test(String(username).trim())) {
+        return res.status(400).json({ success: false, error: 'Username must be 3-24 characters (letters, numbers, dot, underscore).' });
     }
-    if (requesterRole === 'Admin' && (assignedRole === 'Developer' || assignedRole === 'Owner' || assignedRole === 'Admin')) {
-        return res.status(403).json({ success: false, error: 'Admins can only create Staff accounts.' });
+    if (!full_name || String(full_name).trim().length < 2 || String(full_name).trim().length > 60) {
+        return res.status(400).json({ success: false, error: 'Employee full name is required (2-60 characters).' });
+    }
+    if (!position || !EMPLOYEE_POSITIONS.includes(position)) {
+        return res.status(400).json({ success: false, error: 'Position is required (Barista, Cashier, Barista-Cashier, Kitchen, Supervisor).' });
+    }
+
+    const assignedRole = ['Staff', 'Admin', 'Owner', 'Developer'].includes(role) ? role : 'Staff';
+
+    if (!requesterCanManage(requesterRole, assignedRole)) {
+        return res.status(403).json({ success: false, error: `Your role (${requesterRole}) cannot create ${assignedRole} accounts.` });
     }
     if (requesterRole === 'Owner' && assignedRole === 'Developer') {
         return res.status(403).json({ success: false, error: 'Owners cannot create Developer accounts.' });
     }
 
-    const hash = bcrypt.hashSync(password, 10);
+    // SECURITY PLAN P3/P4: accounts are created with an auto-generated temporary password
+    // (never a chosen weak one) and must change it at first login — no 1-char passwords.
+    const tempPassword = generateTemporaryPassword(['Staff'].includes(assignedRole) ? 10 : 14);
+    const hash = bcrypt.hashSync(tempPassword, 12);
+    const cleanName = String(full_name).trim();
+    const cleanUsername = String(username).trim();
 
-    db.run(`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`, [username, hash, assignedRole], function(err) {
-        if (err) {
-            return res.status(400).json({ success: false, error: 'Username already exists.' });
+    db.run(
+        `INSERT INTO users (username, password_hash, role, full_name, position, must_change_password, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, 1, ?)`,
+        [cleanUsername, hash, assignedRole, cleanName, position, performer],
+        function(err) {
+            if (err) {
+                if (String(err.message).toLowerCase().includes('unique')) {
+                    return res.status(400).json({ success: false, error: 'Username already exists.' });
+                }
+                return res.status(500).json({ success: false, error: err.message });
+            }
+
+            const newUserId = this.lastID;
+            const accountCode = format9DigitAccountId(newUserId, assignedRole);
+            db.run(`UPDATE users SET account_code = ? WHERE id = ?`, [accountCode, newUserId], () => {});
+
+            logAudit('USER_CREATE', `Created employee account '${cleanUsername}' (Name: ${cleanName}, Position: ${position}) with Role: ${assignedRole} [ID: ${accountCode}]; temporary password issued, change required at login.`, performer);
+            logAudit('PASSWORD_RESET_INITIATED', `Temporary password generated for new account '${cleanUsername}' [ID: ${accountCode}]`, performer);
+
+            res.json({
+                success: true,
+                id: newUserId,
+                account_id: accountCode,
+                username: cleanUsername,
+                full_name: cleanName,
+                position: position,
+                role: assignedRole,
+                must_change_password: true,
+                temp_password: tempPassword
+            });
         }
-        
-        const newUserId = this.lastID;
-        const accountCode = format9DigitAccountId(newUserId, assignedRole);
+    );
+});
 
-        logAudit('USER_CREATE', `Created user account '${username}' with Role: ${assignedRole} [ID: ${accountCode}]`, performer);
-        
-        res.json({
-            success: true,
-            id: newUserId,
-            account_id: accountCode,
-            username: username,
-            role: assignedRole
-        });
+// SECURITY PLAN P4: single management endpoint — profile update, password reset,
+// deactivate/reactivate, force-unlock. Everyday "removal" is deactivate (reversible);
+// Developer-only DELETE below remains the hard-revoke path.
+app.patch('/api/admin/users/:id', requireAuth, requireNonStaff, (req, res) => {
+    const targetUserId = parseInt(req.params.id, 10);
+    const { action, full_name, position, username } = req.body;
+    const performer = getActiveUser(req);
+    const requesterRole = req.session.role;
+
+    db.get(`SELECT * FROM users WHERE id = ?`, [targetUserId], (err, target) => {
+        if (err || !target) return res.status(404).json({ success: false, error: 'Account not found.' });
+        if (!requesterCanManage(requesterRole, target.role)) {
+            return res.status(403).json({ success: false, error: `Your role (${requesterRole}) cannot manage ${target.role} accounts.` });
+        }
+
+        const code = target.account_code || format9DigitAccountId(target.id, target.role);
+        const finish = (payload) => res.json({ success: true, account_id: code, username: target.username, ...payload });
+
+        if (action === 'update-profile') {
+            const cleanName = String(full_name || '').trim();
+            const cleanPosition = position || target.position;
+            if (cleanName.length < 2 || cleanName.length > 60) {
+                return res.status(400).json({ success: false, error: 'Full name must be 2-60 characters.' });
+            }
+            if (cleanPosition && !EMPLOYEE_POSITIONS.includes(cleanPosition)) {
+                return res.status(400).json({ success: false, error: 'Invalid position.' });
+            }
+            db.run(`UPDATE users SET full_name = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [cleanName, cleanPosition, targetUserId], (err2) => {
+                if (err2) return res.status(500).json({ success: false, error: err2.message });
+                logAudit('PROFILE_UPDATED', `Updated profile of '${target.username}' [${code}] — Name: ${cleanName}, Position: ${cleanPosition || target.position || 'None'}`, performer);
+                return finish({ full_name: cleanName, position: cleanPosition });
+            });
+
+        } else if (action === 'reset-password') {
+            const tempPassword = generateTemporaryPassword(['Staff'].includes(target.role) ? 10 : 14);
+            db.run(`UPDATE users SET password_hash = ?, must_change_password = 1, failed_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [bcrypt.hashSync(tempPassword, 12), targetUserId], (err2) => {
+                if (err2) return res.status(500).json({ success: false, error: err2.message });
+                logAudit('PASSWORD_RESET_INITIATED', `Temporary password generated for '${target.username}' [${code}]; user must change it at next login.`, performer);
+                return finish({ temp_password: tempPassword, must_change_password: true });
+            });
+
+        } else if (action === 'deactivate') {
+            if (targetUserId === req.session.userId) {
+                return res.status(400).json({ success: false, error: 'You cannot deactivate your own account while logged in.' });
+            }
+            if (!target.is_active) {
+                return res.status(400).json({ success: false, error: 'Account is already deactivated.' });
+            }
+            // Guard: never leave the business without an active Admin+ account
+            if (['Admin', 'Owner'].includes(target.role)) {
+                db.get(`SELECT COUNT(*) AS activePrivileged FROM users WHERE is_active = 1 AND role IN ('Admin','Owner','Developer') AND id != ?`, [targetUserId], (cerr, row) => {
+                    if (cerr || (row && row.activePrivileged === 0)) {
+                        return res.status(400).json({ success: false, error: 'Cannot deactivate — at least one active Admin/Owner account must remain.' });
+                    }
+                    doDeactivate();
+                });
+            } else {
+                doDeactivate();
+            }
+
+            function doDeactivate() {
+                db.run(`UPDATE users SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [targetUserId], (err2) => {
+                    if (err2) return res.status(500).json({ success: false, error: err2.message });
+                    logAudit('SUSPEND_ACCOUNT', `Deactivated employee account '${target.username}' [${code}] (reversible).`, performer);
+                    return finish({ is_active: false });
+                });
+            }
+
+        } else if (action === 'reactivate') {
+            if (target.is_active) {
+                return res.status(400).json({ success: false, error: 'Account is already active.' });
+            }
+            db.run(`UPDATE users SET is_active = 1, failed_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [targetUserId], (err2) => {
+                if (err2) return res.status(500).json({ success: false, error: err2.message });
+                logAudit('ACCOUNT_REACTIVATED', `Reactivated employee account '${target.username}' [${code}].`, performer);
+                return finish({ is_active: true });
+            });
+
+        } else if (action === 'force-unlock') {
+            if (!target.failed_attempts && !target.locked_until) {
+                return res.status(400).json({ success: false, error: 'Account is not locked.' });
+            }
+            db.run(`UPDATE users SET failed_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [targetUserId], (err2) => {
+                if (err2) return res.status(500).json({ success: false, error: err2.message });
+                logAudit('ACCOUNT_UNLOCKED', `Manually cleared lockout/failed attempts for '${target.username}' [${code}].`, performer);
+                return finish({ unlocked: true });
+            });
+
+        } else {
+            return res.status(400).json({ success: false, error: 'Unknown account action. Use update-profile, reset-password, deactivate, reactivate, or force-unlock.' });
+        }
     });
 });
 
@@ -1030,25 +1642,57 @@ app.post('/api/admin/change-password', requireAuth, (req, res) => {
     const userId = req.session.userId;
     const performer = getActiveUser(req);
 
+    // SECURITY PLAN P3: current password is REQUIRED — a change can never silently
+    // keep the old hash. Password policy enforced only on the NEW password.
+    if (!currentPassword) {
+        return res.status(400).json({ success: false, error: 'Current password is required.' });
+    }
+
     db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
         if (!user) return res.status(404).json({ success: false, error: 'Account user not found.' });
 
         const isValid = bcrypt.compareSync(currentPassword, user.password_hash);
         if (!isValid) {
+            logAudit('CREDENTIALS_UPDATE_FAILED', `Failed credential change — wrong current password for '${user.username}'.`, performer);
             return res.status(401).json({ success: false, error: 'Current password incorrect.' });
         }
 
-        const newHash = newPassword ? bcrypt.hashSync(newPassword, 10) : user.password_hash;
-        const updatedUsername = newUsername || user.username;
+        let newHash = user.password_hash;
+        let passwordChanged = false;
+        if (newPassword) {
+            const policyError = validatePasswordPolicy(newPassword, user.role || 'Staff');
+            if (policyError) {
+                return res.status(400).json({ success: false, error: policyError });
+            }
+            newHash = bcrypt.hashSync(newPassword, 12);
+            passwordChanged = true;
+        }
 
-        db.run(`UPDATE users SET username = ?, password_hash = ? WHERE id = ?`, [updatedUsername, newHash, userId], function(err) {
-            if (err) return res.status(400).json({ success: false, error: 'Username already in use.' });
+        let updatedUsername = user.username;
+        if (newUsername && newUsername !== user.username) {
+            const clean = String(newUsername).trim();
+            if (!/^[A-Za-z0-9_.]{3,24}$/.test(clean)) {
+                return res.status(400).json({ success: false, error: 'Username must be 3-24 characters (letters, numbers, dot, underscore).' });
+            }
+            updatedUsername = clean;
+        }
 
-            req.session.username = updatedUsername;
-            logAudit('CREDENTIALS_UPDATE', `User '${user.username}' updated credentials/username to '${updatedUsername}'.`, performer);
+        db.run(
+            `UPDATE users SET username = ?, password_hash = ?, must_change_password = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [updatedUsername, newHash, userId],
+            function(err) {
+                if (err) return res.status(400).json({ success: false, error: 'Username already in use.' });
 
-            res.json({ success: true, username: updatedUsername });
-        });
+                req.session.username = updatedUsername;
+                logAudit(
+                    'CREDENTIALS_UPDATE',
+                    `User '${user.username}' updated credentials/username to '${updatedUsername}'${passwordChanged ? ' (new password set, temp-password flag cleared, bcrypt cost 12)' : ' (username only)'}.`,
+                    performer
+                );
+
+                res.json({ success: true, username: updatedUsername, password_changed: passwordChanged });
+            }
+        );
     });
 });
 
@@ -1158,7 +1802,7 @@ app.get('/api/admin/inventory', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/inventory', requireAuth, (req, res) => {
+app.post('/api/admin/inventory', requireAuth, requireNonStaff, (req, res) => {
     // PART 2: container registration is strictly name/unit/stock/threshold/cost —
     // menu linking happens afterwards via recipe_links (Quick Link / Smart Recipe Links)
     const { item_name, container_unit, stock_quantity, safety_threshold, item_cost } = req.body;
@@ -1185,7 +1829,7 @@ app.post('/api/admin/inventory', requireAuth, (req, res) => {
     );
 });
 
-app.patch('/api/admin/inventory/:id', requireAuth, (req, res) => {
+app.patch('/api/admin/inventory/:id', requireAuth, requireNonStaff, (req, res) => {
     const itemId = req.params.id;
     const { item_cost, safety_threshold } = req.body;
     const performer = getActiveUser(req);
@@ -1291,7 +1935,7 @@ const AUDIT_VARIANCE_REASONS = {
 // is tracked digitally via usage_logs remainder and is NEVER physically counted or
 // weighed — staff never touch grams/milliliters during audits.
 // Call without actual_stock to get the expectation hint only (no discrepancy check).
-app.post('/api/admin/inventory/audit/preview', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/audit/preview', requireAuth, requireNonStaff, (req, res) => {
     const { inventory_item_id, actual_stock } = req.body;
 
     if (!inventory_item_id) {
@@ -1341,7 +1985,7 @@ app.post('/api/admin/inventory/audit/preview', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/inventory/audit', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/audit', requireAuth, requireNonStaff, (req, res) => {
     const { inventory_item_id, shift_period, actual_stock, notes, reason_code } = req.body;
     const performer = getActiveUser(req);
 
@@ -1433,7 +2077,7 @@ app.post('/api/admin/inventory/audit', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/inventory/waste', requireAuth, (req, res) => {
+app.post('/api/inventory/waste', requireAuth, requireNonStaff, (req, res) => {
     const { inventory_item_id, quantity_lost, reason_code, reporter, notes } = req.body;
     const performer = getActiveUser(req);
 
@@ -1479,7 +2123,7 @@ app.post('/api/inventory/waste', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/inventory/pos-sync', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/pos-sync', requireAuth, requireNonStaff, (req, res) => {
     const { pos_data, transaction_ref } = req.body;
     const performer = getActiveUser(req);
 
@@ -1508,7 +2152,7 @@ app.post('/api/admin/inventory/pos-sync', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/inventory/close-shift', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/close-shift', requireAuth, requireNonStaff, (req, res) => {
     const { shift_date, total_sales_amount, discount_amount, items_sold } = req.body;
     const performer = getActiveUser(req);
 
@@ -1724,7 +2368,7 @@ app.get('/api/admin/closeouts/:id/items', requireAuth, (req, res) => {
    10. MENU MANAGEMENT REST API ENDPOINTS
    =========================================================================== */
 
-app.post('/api/admin/menu', requireAuth, upload.single('image'), (req, res) => {
+app.post('/api/admin/menu', requireAuth, requireNonStaff, upload.single('image'), (req, res) => {
     const { name, category, badge, price, description } = req.body;
     const performer = getActiveUser(req);
 
@@ -1748,7 +2392,7 @@ app.post('/api/admin/menu', requireAuth, upload.single('image'), (req, res) => {
     );
 });
 
-app.patch('/api/admin/menu/:id/toggle', requireAuth, (req, res) => {
+app.patch('/api/admin/menu/:id/toggle', requireAuth, requireNonStaff, (req, res) => {
     const itemId = req.params.id;
     const { is_available } = req.body;
     const performer = getActiveUser(req);
@@ -1764,7 +2408,7 @@ app.patch('/api/admin/menu/:id/toggle', requireAuth, (req, res) => {
     });
 });
 
-app.patch('/api/admin/menu/:id/priority', requireAuth, (req, res) => {
+app.patch('/api/admin/menu/:id/priority', requireAuth, requireNonStaff, (req, res) => {
     const itemId = req.params.id;
     const { priority_rank } = req.body;
     const performer = getActiveUser(req);
@@ -1801,7 +2445,7 @@ app.delete('/api/admin/menu/:id', requireAdminOrAbove, (req, res) => {
    11. HERO BANNERS & OPERATING HOURS REST APIS
    =========================================================================== */
 
-app.post('/api/admin/hero-slides', requireAuth, upload.single('image'), (req, res) => {
+app.post('/api/admin/hero-slides', requireAuth, requireNonStaff, upload.single('image'), (req, res) => {
     const { tag, title, subtitle } = req.body;
     const performer = getActiveUser(req);
     const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
@@ -1817,7 +2461,7 @@ app.post('/api/admin/hero-slides', requireAuth, upload.single('image'), (req, re
     );
 });
 
-app.delete('/api/admin/hero-slides/:id', requireAuth, (req, res) => {
+app.delete('/api/admin/hero-slides/:id', requireAuth, requireNonStaff, (req, res) => {
     const slideId = req.params.id;
     const performer = getActiveUser(req);
 
@@ -1835,7 +2479,7 @@ app.delete('/api/admin/hero-slides/:id', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/settings', requireAuth, (req, res) => {
+app.post('/api/admin/settings', requireAuth, requireNonStaff, (req, res) => {
     const { open_time, close_time, store_status, closure_start, closure_end, notice_message } = req.body;
     const performer = getActiveUser(req);
 
@@ -1919,7 +2563,7 @@ app.get('/api/admin/inventory/container-cards', requireAuth, (req, res) => {
 });
 
 // Recipe links for one menu item (what bulk containers it consumes)
-app.get('/api/admin/recipes/:menuItemId', requireAuth, (req, res) => {
+app.get('/api/admin/recipes/:menuItemId', requireAuth, requireNonStaff, (req, res) => {
     const menuId = parseInt(req.params.menuItemId, 10);
     db.all(`
         SELECT r.*, i.item_name, i.container_unit
@@ -1942,7 +2586,7 @@ app.get('/api/admin/menu', requireAuth, (req, res) => {
 });
 
 // Create or update a recipe link (menu item -> container, usage per serving)
-app.post('/api/admin/recipes', requireAuth, (req, res) => {
+app.post('/api/admin/recipes', requireAuth, requireNonStaff, (req, res) => {
     const { menu_item_id, inventory_item_id, usage_amount, usage_unit, container_quantity } = req.body;
     const performer = getActiveUser(req);
 
@@ -1954,7 +2598,10 @@ app.post('/api/admin/recipes', requireAuth, (req, res) => {
     if (!menuId || !invId || !(perServing > 0) || !(containerQty > 0)) {
         return res.status(400).json({ success: false, error: 'menu_item_id, inventory_item_id, usage_amount and container_quantity (all > 0) are required.' });
     }
-    const unit = (usage_unit === 'ml') ? 'ml' : 'g';
+    // Usage units: grams / milliliters (weighed goods) and pieces (supplier-made goods
+    // like whole bread — staff count whole sealed packs; opened ones run digitally).
+    const unitRaw = String(usage_unit || 'g').toLowerCase();
+    const unit = ['g', 'ml', 'pcs'].includes(unitRaw) ? unitRaw : 'g';
 
     db.run(`
         INSERT INTO recipe_links (menu_item_id, inventory_item_id, usage_amount, usage_unit, container_quantity)
@@ -1971,7 +2618,7 @@ app.post('/api/admin/recipes', requireAuth, (req, res) => {
 });
 
 // Remove a recipe link
-app.delete('/api/admin/recipes/:id', requireAuth, (req, res) => {
+app.delete('/api/admin/recipes/:id', requireAuth, requireNonStaff, (req, res) => {
     const id = parseInt(req.params.id, 10);
     const performer = getActiveUser(req);
     db.run(`DELETE FROM recipe_links WHERE id = ?`, [id], function(err) {
@@ -2066,9 +2713,20 @@ function computeSmartLedger(soldItems, cb) {
                 const usedThisLink = sold * perServing;
                 const openedBefore = c.remainder;
 
-                const combined = openedBefore + usedThisLink;
-                let wholeUsed = containerQty > 0 ? Math.floor(combined / containerQty) : 0;
-                let newRemainder = containerQty > 0 ? combined - wholeUsed * containerQty : combined;
+                let netNeeded = usedThisLink - openedBefore;
+                let wholeUsed = 0;
+                let newRemainder = 0;
+
+                if (netNeeded <= 0) {
+                    // Opening remainder is enough to cover the sales usage
+                    wholeUsed = 0;
+                    newRemainder = openedBefore - usedThisLink;
+                } else {
+                    // Sales exceed the opening remainder; open whole containers from stock
+                    wholeUsed = containerQty > 0 ? Math.ceil(netNeeded / containerQty) : 0;
+                    let totalAvailable = openedBefore + (wholeUsed * containerQty);
+                    newRemainder = totalAvailable - usedThisLink;
+                }
 
                 if (wholeUsed > Math.floor(c.stock_before)) {
                     c.warning = c.warning || 'STOCK_OVERFLOW';
@@ -2113,7 +2771,7 @@ function computeSmartLedger(soldItems, cb) {
 }
 
 // Legacy granular endpoint kept for backwards compatibility (preview + raw apply)
-app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/calc-shift-usage', requireAuth, requireNonStaff, (req, res) => {
     const { shift_date } = req.body;
     const isPreview = req.body.preview === true || req.body.preview === 'true';
     const performer = getActiveUser(req);
@@ -2202,7 +2860,7 @@ app.post('/api/admin/inventory/calc-shift-usage', requireAuth, (req, res) => {
 // remainder rollovers, and Many-to-Many kill-switches. preview=true returns the
 // exact same breakdown without touching a single row.
 // Body: { shift_date, total_sales_amount, discount_amount, items: [{menu_item_id, quantity_sold}], preview }
-app.post('/api/admin/inventory/unified-closeout', requireAuth, (req, res) => {
+app.post('/api/admin/inventory/unified-closeout', requireAuth, requireNonStaff, (req, res) => {
     const { shift_date } = req.body;
     const isPreview = req.body.preview === true || req.body.preview === 'true';
     const performer = getActiveUser(req);
@@ -2361,7 +3019,7 @@ app.post('/api/admin/inventory/unified-closeout', requireAuth, (req, res) => {
 /* ===========================================================================
    12. AUDIT LOGS REST API
    =========================================================================== */
-app.get('/api/admin/audit-logs', requireAuth, (req, res) => {
+app.get('/api/admin/audit-logs', requireAuth, requireAdminOrAbove, (req, res) => {
     db.all(`SELECT * FROM audit_logs ORDER BY id DESC LIMIT 500`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
@@ -2402,7 +3060,7 @@ function autoAnonymizeExpiredPII() {
 }
 setInterval(autoAnonymizeExpiredPII, 24 * 60 * 60 * 1000);
 
-app.post('/api/admin/menu/:id/reorder', requireAuth, (req, res) => {
+app.post('/api/admin/menu/:id/reorder', requireAuth, requireNonStaff, (req, res) => {
     const itemId = req.params.id;
     const { direction } = req.body;
     const performer = getActiveUser(req);
@@ -2431,7 +3089,7 @@ app.post('/api/admin/menu/:id/reorder', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/admin/hero-slides/:id/reorder', requireAuth, (req, res) => {
+app.post('/api/admin/hero-slides/:id/reorder', requireAuth, requireNonStaff, (req, res) => {
     const slideId = req.params.id;
     const { direction } = req.body;
     const performer = getActiveUser(req);

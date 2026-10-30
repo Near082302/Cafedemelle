@@ -320,14 +320,14 @@
                 <button id="btn-subtab-ops" class="sub-tab-btn" onclick="switchInventorySubTab('ops', this)">
                     <i class="fa-solid fa-hand-holding-hand"></i> Supply Operations
                 </button>
-                <button class="sub-tab-btn" onclick="switchInventorySubTab('register', this)">
-                    <i class="fa-solid fa-box-archive"></i> Register Container
-                </button>
                 <button class="sub-tab-btn" onclick="switchInventorySubTab('eod', this)">
                     <i class="fa-solid fa-calculator"></i> EOD Closeout &amp; Smart Deductions
                 </button>
                 <button class="sub-tab-btn" onclick="switchInventorySubTab('recipes', this)">
                     <i class="fa-solid fa-link"></i> Smart Recipe Links
+                </button>
+                <button class="sub-tab-btn" onclick="switchInventorySubTab('register', this)">
+                    <i class="fa-solid fa-box-archive"></i> Register Container
                 </button>
             </div>
 
@@ -413,7 +413,8 @@
                     <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:0.88rem; color:#2e7d32; line-height:1.45;">
                         <strong><i class="fa-solid fa-layer-group"></i> Two-Tier Counting Rule:</strong>
                         Count ONLY the <strong>whole, unopened containers</strong> on the shelf.
-                        <strong>Never count or weigh grams/ml</strong> — the currently opened container is tracked
+                        <strong>Never weigh grams/ml or split-count opened pieces</strong> — for piece-based goods
+                        (whole bread, supplier-made items), count whole sealed packs only. The opened container is tracked
                         automatically by the system, so there is nothing physical for you to measure.
                     </div>
                     <div id="audit-system-expectation" style="display:none; background:#f0f4ff; border:1px solid #c5cae9; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:0.88rem; line-height:1.45;"></div>
@@ -551,8 +552,21 @@
                     <h2><i class="fa-solid fa-calculator"></i> EOD Closeout &amp; Smart Deductions</h2>
                     <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
                         One seamless end-of-day closeout: log the shift financials, tally what you sold, then let the Smart Engine
-                        preview the exact container usage (whole bags + gram/ml remainders) before a single transactional save.
+                        preview the exact container usage (whole bags + grams/ml/pieces remainders) before a single transactional save.
                     </p>
+
+                    <!-- 💡 Quick-Jump Helper for Forgetful Managers -->
+                    <div style="background: var(--alt-bg); border: 1px solid var(--gold); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 0.9rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                        <span>💡 <strong>Forgot to log a delivery or spillage item?</strong> Quick-jump to Supply Operations:</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn-action" style="padding: 5px 12px; font-size: 0.8rem;" onclick="switchInventorySubTab('ops', document.getElementById('btn-subtab-ops')); switchOpsForm('stockin');">
+                                <i class="fa-solid fa-truck-ramp-box"></i> Log Delivery
+                            </button>
+                            <button type="button" class="btn-action btn-danger" style="padding: 5px 12px; font-size: 0.8rem;" onclick="switchInventorySubTab('ops', document.getElementById('btn-subtab-ops')); switchOpsForm('waste');">
+                                <i class="fa-solid fa-dumpster-fire"></i> Log Spillage
+                            </button>
+                        </div>
+                    </div>
 
                     <div id="form-eod-closeout">
                         <!-- ============ TOP SECTION: SHIFT FINANCIALS ============ -->
@@ -632,7 +646,8 @@
                 <div class="panel-card">
                     <h2><i class="fa-solid fa-link"></i> Smart Recipe Links (Container &harr; Menu Items)</h2>
                     <p style="font-size: 0.88rem; color: #666; margin-bottom: 15px;">
-                        Every registered bulk container shows each menu item linked to it and how many grams/ml one serving consumes.
+                        Every registered bulk container shows each menu item linked to it and how many grams, ml, or
+                        pieces ONE serving consumes (pieces = supplier-made goods like whole bread).
                         Use <strong>+ Link Menu Item</strong> on any card to attach or detach as many menu items as you like.
                     </p>
                     <div id="smart-container-cards" class="smart-cards-grid"></div>
@@ -646,25 +661,52 @@
                         <p style="font-size:0.85rem;color:#666;margin-bottom:15px;">Define how much of this bulk container ONE serving consumes.</p>
                         <div class="form-group">
                             <label>Menu Item</label>
-                            <select id="smart-link-menu" class="form-control"></select>
+                            <div class="custom-dropdown" id="smart-link-menu-dropdown">
+                                <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                                    <span class="dropdown-selected-text">-- Select Menu Item --</span>
+                                    <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                                </div>
+                                <div class="dropdown-menu" id="smart-link-menu-options" style="max-height: 220px; overflow-y: auto;">
+                                    <!-- Dynamically populated via admin.js -->
+                                </div>
+                                <input type="hidden" id="smart-link-menu">
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Bulk Container (Inventory Item)</label>
-                            <select id="smart-link-inventory" class="form-control"></select>
+                            <div class="custom-dropdown" id="smart-link-inventory-dropdown">
+                                <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                                    <span class="dropdown-selected-text">-- Select Bulk Container Item --</span>
+                                    <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                                </div>
+                                <div class="dropdown-menu" id="smart-link-inventory-options" style="max-height: 220px; overflow-y: auto;">
+                                    <!-- Dynamically populated via admin.js -->
+                                </div>
+                                <input type="hidden" id="smart-link-inventory">
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label>Usage per serving (grams or ml)</label>
+                            <label>Usage per serving (grams, ml, or pieces)</label>
                             <input type="number" id="smart-link-usage" class="form-control" min="0" step="0.01" placeholder="e.g. 20">
                         </div>
                         <div class="form-group">
                             <label>Unit</label>
-                            <select id="smart-link-unit" class="form-control">
-                                <option value="g">grams (g)</option>
-                                <option value="ml">milliliters (ml)</option>
-                            </select>
+                            <div class="custom-dropdown" id="smart-link-unit-dropdown">
+                                <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                                    <span class="dropdown-selected-text" id="smart-link-unit-label">grams (g) — weighed</span>
+                                    <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                                </div>
+                                <div class="dropdown-menu" id="smart-link-unit-options">
+                                    <div class="dropdown-option active" data-value="g" onclick="selectCustomOption(this, this.dataset.value); syncSmartLinkUnitHint()">grams (g) — weighed</div>
+                                    <div class="dropdown-option" data-value="ml" onclick="selectCustomOption(this, this.dataset.value); syncSmartLinkUnitHint()">milliliters (ml) — poured</div>
+                                    <div class="dropdown-option" data-value="pcs" onclick="selectCustomOption(this, this.dataset.value); syncSmartLinkUnitHint()">pieces (pc) — supplier-made</div>
+                                </div>
+                                <input type="hidden" id="smart-link-unit" value="g">
+                            </div>
+                            <div id="smart-link-unit-hint" style="background:#f4efe2; border:1px dashed var(--light-accent); border-radius:8px; padding:8px 12px; margin-top:8px; font-size:0.8rem; color:#6b5637; line-height:1.45;"></div>
                         </div>
                         <div class="form-group">
-                            <label>Container capacity (grams/ml per whole container, e.g. coffee bag = 1000)</label>
+                            <label>Container capacity (g / ml / pieces per whole container)</label>
                             <input type="number" id="smart-link-container-qty" class="form-control" min="0" step="0.01" placeholder="e.g. 1000">
                         </div>
                         <div style="display:flex; gap:10px; margin-top:10px;">
@@ -839,61 +881,64 @@
              MENU CATALOG MANAGEMENT TAB
              =================================================================== -->
         <section id="tab-menu" class="tab-section">
-            <div class="panel-card">
-                <h2><i class="fa-solid fa-plus"></i> Add New Menu Item</h2>
-                <form id="add-menu-form" onsubmit="handleAddMenuItem(event)">
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px;">
-                        <div class="form-group">
-                            <label>Item Name:</label>
-                            <input type="text" name="name" required placeholder="e.g., Iced Matcha Latte" oninput="autoCapitalize(this)">
-                        </div>
-                        <div class="form-group">
-    <label>Category:</label>
-    <div class="custom-dropdown" id="category-dropdown">
-        <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
-            <span class="dropdown-selected-text">Hot Coffee</span>
-            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
-        </div>
-        <div class="dropdown-menu">
-            <div class="dropdown-option active" onclick="selectCustomOption(this, 'Hot Coffee')">Hot Coffee</div>
-            <div class="dropdown-option" onclick="selectCustomOption(this, 'Cold Coffee')">Iced Coffee</div>
-            <div class="dropdown-option" onclick="selectCustomOption(this, 'Non-Coffee')">Non-Coffee</div>
-            <div class="dropdown-option" onclick="selectCustomOption(this, 'Pastries')">Pastries</div>
-            <div class="dropdown-option" onclick="selectCustomOption(this, 'Fruit Sodas')">Fruit Sodas</div>
-        </div>
-        <input type="hidden" name="category" value="Hot Coffee">
-    </div>
-</div>
-                        <div class="form-group">
-                            <label>Price (₱):</label>
-                            <input type="number" name="price" required min="1" placeholder="e.g., 140">
-                        </div>
-                       <div class="form-group">
-    <label>Badge Highlight:</label>
-    <div class="pill-btn-group" id="badge-pill-group">
-    <button type="button" class="pill-btn active" data-value="none" onclick="selectBadge('none', this)">None</button>
-    <button type="button" class="pill-btn" data-value="signature" onclick="selectBadge('signature', this)">
-        <i class="fa-solid fa-heart" style="color:var(--primary);"></i> Cafe Signature
-    </button>
-    <button type="button" class="pill-btn" data-value="favorite" onclick="selectBadge('favorite', this)">
-        <i class="fa-solid fa-star" style="color:var(--gold);"></i> Customer Favorite
-    </button>
-</div>
-    <!-- Hidden input to retain form submission compatibility -->
-    <input type="hidden" name="badge" id="selected-badge-input" value="none">
-</div>
-                    </div>
-                    <div class="form-group">
-                        <label>Description:</label>
-                        <textarea name="description" rows="2" placeholder="Item details, flavor profiles, and ingredients..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Item Photo:</label>
-                        <input type="file" name="image" accept="image/*">
-                    </div>
-                    <button type="submit" class="btn-action"><i class="fa-solid fa-cloud-arrow-up"></i> Add to Menu</button>
-                </form>
+           <div class="panel-card">
+    <h2><i class="fa-solid fa-plus"></i> Add New Menu Item</h2>
+    <form id="add-menu-form" onsubmit="handleAddMenuItem(event)">
+        <!-- Top Row: Name, Category, Price -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:15px;">
+            <div class="form-group">
+                <label>Item Name:</label>
+                <input type="text" name="name" required placeholder="e.g., Iced Matcha Latte" oninput="autoCapitalize(this)">
             </div>
+            <div class="form-group">
+                <label>Category:</label>
+                <div class="custom-dropdown" id="category-dropdown">
+                    <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                        <span class="dropdown-selected-text">Hot Coffee</span>
+                        <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                    </div>
+                    <div class="dropdown-menu">
+                        <div class="dropdown-option active" onclick="selectCustomOption(this, 'Hot Coffee')">Hot Coffee</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Cold Coffee')">Iced Coffee</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Non-Coffee')">Non-Coffee</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Pastries')">Pastries</div>
+                        <div class="dropdown-option" onclick="selectCustomOption(this, 'Fruit Sodas')">Fruit Sodas</div>
+                    </div>
+                    <input type="hidden" name="category" value="Hot Coffee">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Price (₱):</label>
+                <input type="number" name="price" required min="1" placeholder="e.g., 140">
+            </div>
+        </div>
+
+        <!-- Second Row: Badge Highlight gets its own clean full-width row -->
+        <div class="form-group" style="margin-top: 15px;">
+            <label>Badge Highlight:</label>
+            <div class="pill-btn-group" id="badge-pill-group">
+                <button type="button" class="pill-btn active" data-value="none" onclick="selectBadge('none', this)">None</button>
+                <button type="button" class="pill-btn" data-value="signature" onclick="selectBadge('signature', this)">
+                    <i class="fa-solid fa-heart" style="color:var(--primary);"></i> Cafe Signature
+                </button>
+                <button type="button" class="pill-btn" data-value="favorite" onclick="selectBadge('favorite', this)">
+                    <i class="fa-solid fa-star" style="color:var(--gold);"></i> Customer Favorite
+                </button>
+            </div>
+            <input type="hidden" name="badge" id="selected-badge-input" value="none">
+        </div>
+
+        <div class="form-group">
+            <label>Description:</label>
+            <textarea name="description" rows="2" placeholder="Item details, flavor profiles, and ingredients..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>Item Photo:</label>
+            <input type="file" name="image" accept="image/*">
+        </div>
+        <button type="submit" class="btn-action"><i class="fa-solid fa-cloud-arrow-up"></i> Add to Menu</button>
+    </form>
+</div>
 
             <div class="panel-card">
                 <h2><i class="fa-solid fa-utensils"></i> Active Menu Catalog</h2>
@@ -911,11 +956,18 @@
                         <button type="button" class="btn-filter-pill" onclick="filterMenuCatalogCategory('Fruit Sodas', this)">Fruit Sodas</button>
                     </div>
                     <div class="date-range-container">
-                        <select id="menu-catalog-sort" onchange="filterAndSortMenuCatalog()">
-                            <option value="views">Sort: Highest Views</option>
-                            <option value="alpha">Sort: Alphabetical (A-Z)</option>
-                            <option value="price-asc">Sort: Price: Low to High</option>
-                        </select>
+                        <div class="custom-dropdown" id="menu-catalog-sort-dropdown">
+                            <div class="dropdown-trigger" onclick="toggleCustomDropdown(this)">
+                                <span class="dropdown-selected-text">Sort: Highest Views</span>
+                                <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                            </div>
+                            <div class="dropdown-menu" id="menu-catalog-sort-options">
+                                <div class="dropdown-option active" data-value="views" onclick="selectCustomOption(this, this.dataset.value); filterAndSortMenuCatalog()">Sort: Highest Views</div>
+                                <div class="dropdown-option" data-value="alpha" onclick="selectCustomOption(this, this.dataset.value); filterAndSortMenuCatalog()">Sort: Alphabetical (A-Z)</div>
+                                <div class="dropdown-option" data-value="price-asc" onclick="selectCustomOption(this, this.dataset.value); filterAndSortMenuCatalog()">Sort: Price: Low to High</div>
+                            </div>
+                            <input type="hidden" id="menu-catalog-sort" value="views">
+                        </div>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -1062,22 +1114,25 @@
         </section>
 
         <!-- ===================================================================
-             SECURITY & ROLES TAB
+             SECURITY & ROLES TAB (PART 3 — SECURITY PLAN)
              =================================================================== -->
         <section id="tab-account" class="tab-section">
             <div class="panel-card card-personal-creds">
                 <h2><i class="fa-solid fa-user-lock"></i> Update My Personal Credentials</h2>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">
+                    Password policy: Staff minimum 8 characters — Admin/Owner/Developer minimum 12 — always with letters, a number, and a symbol. Your current password is always required.
+                </p>
                 <form id="change-pass-form" onsubmit="handleChangePersonalPassword(event)">
                     <div class="form-group">
                         <label>Username:</label>
-                        <input type="text" id="my-username" required placeholder="Enter username">
+                        <input type="text" id="my-username" placeholder="Enter username">
                     </div>
                     <div class="form-group">
                         <label>Current Password:</label>
                         <input type="password" id="my-curr-pass" required placeholder="Confirm current password">
                     </div>
                     <div class="form-group">
-                        <label>New Password (Leave blank if keeping current):</label>
+                        <label>New Password (leave blank to only update username):</label>
                         <input type="password" id="my-new-pass" placeholder="Enter new password">
                     </div>
                     <button type="submit" class="btn-action"><i class="fa-solid fa-key"></i> Update Credentials</button>
@@ -1085,15 +1140,29 @@
             </div>
 
             <div class="panel-card card-role-mgmt">
-                <h2><i class="fa-solid fa-user-plus"></i> Create New Staff / Manager Account</h2>
+                <h2><i class="fa-solid fa-user-plus"></i> Add Employee Account</h2>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">
+                    The system auto-generates a <strong>temporary password</strong>. The employee changes it at their first login — nobody powers through with a weak one.
+                </p>
                 <form id="create-user-form" onsubmit="interceptCreateUserAccount(event)">
                     <div class="form-group">
-                        <label>New Account Username:</label>
-                        <input type="text" id="new-user-name" required placeholder="e.g., barista_john">
+                        <label>Employee Full Name:</label>
+                        <input type="text" id="new-user-fullname" required placeholder="e.g., Ana Reyes" oninput="autoCapitalize(this)">
                     </div>
                     <div class="form-group">
-                        <label>Account Password:</label>
-                        <input type="password" id="new-user-pass" required placeholder="Assign temporary password">
+                        <label>Position:</label>
+                        <div class="custom-pill-selector">
+                            <button type="button" class="pill-btn active" onclick="selectUserPositionPill('Barista', this)">Barista</button>
+                            <button type="button" class="pill-btn" onclick="selectUserPositionPill('Cashier', this)">Cashier</button>
+                            <button type="button" class="pill-btn" onclick="selectUserPositionPill('Barista-Cashier', this)">Barista-Cashier</button>
+                            <button type="button" class="pill-btn" onclick="selectUserPositionPill('Kitchen', this)">Kitchen</button>
+                            <button type="button" class="pill-btn" onclick="selectUserPositionPill('Supervisor', this)">Supervisor</button>
+                        </div>
+                        <input type="hidden" id="new-user-position" value="Barista">
+                    </div>
+                    <div class="form-group">
+                        <label>Username (login handle):</label>
+                        <input type="text" id="new-user-name" required placeholder="e.g., ana.reyes">
                     </div>
                     <div class="form-group">
     <label>Assigned System Role:</label>
@@ -1105,21 +1174,49 @@
 </div>
                     <button type="submit" class="btn-action"><i class="fa-solid fa-user-check"></i> Initialize Account</button>
                 </form>
+                <div id="new-user-result" style="display:none; margin-top:15px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:10px; padding:14px 16px; line-height:1.6;">
+                    <!-- populated by admin.js: account code + temp password with copy button -->
+                </div>
             </div>
 
             <div class="panel-card">
-                <h2><i class="fa-solid fa-users-gear"></i> System Accounts Registry</h2>
+                <h2><i class="fa-solid fa-users-gear"></i> Employee Roster &amp; Account Status</h2>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">
+                    🟢 Active · 🟡 Temporary password (must change at first login) · 🔴 Locked · ⚫ Deactivated. Everyday removal is <strong>Deactivate</strong> (reversible) — hard-delete is Developer-only.
+                </p>
                 <div class="table-responsive">
                     <table class="custom-table">
                         <thead>
                             <tr>
-                                <th>Role ID</th>
-                                <th>Username</th>
+                                <th>Employee</th>
+                                <th>Account Code</th>
+                                <th>Position</th>
                                 <th>Role</th>
+                                <th>Status</th>
+                                <th>Last Login</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="users-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel-card owner-dev-only" id="developer-console-strip" style="display:none;">
+                <h2><i class="fa-solid fa-terminal"></i> Developer Console — Deep Audit &amp; Hard-Revoke</h2>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 12px;">
+                    Last 40 account-lifecycle security events. Hard-revoke (permanent delete) is available per-row on the roster and stays strictly Developer-only; managers should use Deactivate.
+                </p>
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dev-security-log-body"></tbody>
                     </table>
                 </div>
             </div>

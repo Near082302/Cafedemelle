@@ -72,4 +72,29 @@ Goal: Support true Many-to-Many relationships between bulk containers and menu i
 - [x] Ensure menu items with no recipe links display safe warnings during preview without blocking the transaction (NO_RECIPE_LINK warning shown, sale still saved, nothing deducted).
 - [x] Verify existing tables (shipments, audit, waste, pos-sync) remain untouched and fully operational.
 - [x] Soft audit reconciliation + variance reason codes verified locally on dev: preview endpoint, gentle modal flow, `audit_variances` ledger row, zero false `wastage_logs` entries on reconcile, legacy `EVENING_AUDIT_STOCKOUT` path still intact, variance filter pill + CSV export working. (Remaining: red-team during real evening shifts on blue.)
-- [ ] Once stable on blue → merge `dev` → `main` and deploy green.
+- [ ] Test the soft audit reconciliation and variance reason codes during evening shifts.
+- [x] **Pieces (per piece) usage unit added**: not all inventory goods are weighed in g/ml (whole bread / supplier-made items are counted in PIECES). Smart Recipe Links + the unified EOD engine now support a third unit `pcs`: usage per serving = 1/2/3 pieces, container capacity = pieces per sealed pack (supplier box of bread = 10; single loose pieces = 1). Pieces math verified (12 toasts × 2 pcs = 24 → 2 whole boxes deducted, opened box carries 4 pcs digitally); the two-tier counting rule text, Quick-Link modal coaching hints, and container stock pill (`X Pieces left`) were updated for mobile + desktop uniformity without disturbing the existing responsive layout.
+- [ ] Once stable on blue → merge `dev` → `main` and deploy green (ask for permission before merging or before deploying blue)
+
+---
+
+## PART 3 — Security & Roles Overhaul (`securityplan.md` = full spec + test log)
+
+> Status: IMPLEMENTED on dev (blue), locally tested 2026-10-30. All credentials +
+> account codes live in `securityplan.md` Section 10 (git-ignored, owner-only).
+
+### 3.6 Phases
+- [x] **P1 — users schema v2**: non-destructive migration adds full_name, position, account_code (permanent 9-digit), must_change_password, failed_attempts, locked_until, last_login, is_active, created_by, updated_at + unique index; one-time backfill issued codes + generated cost-12 temp passwords for all pre-existing accounts.
+- [x] **P2 — login.html rebuild**: two-step bank-style portal (identify by account code `300-000-015` format or username → masked employee card → password), 15-min per-account server-side lock after 5 fails with live "attempts remaining", forced password-change step with strength meter, locked/inactive state screens.
+- [x] **P3 — auth endpoints**: NEW `POST /api/admin/login/identify`, REWRITE `/api/admin/login` (account code OR username, active/lock checks, `session.regenerate()` fixation fix, profile in session, pending non-admin session for temp-password users), NEW `pending-session` + `login/complete-change` (no bypass to panel), REWRITE `change-password` (current password required, policy), UPGRADE `POST /api/admin/users` (full name/position/role validation, auto temp password `must_change_password=1`), NEW `PATCH /api/admin/users/:id` (update-profile / reset-password / deactivate / reactivate / force-unlock; Admin→Staff, Owner→+Admin, Developer→all), DELETE stays Developer-only hard-revoke.
+- [x] **P4 — Security & Roles tab**: HR-directory roster (avatar initials, name, position, account-code chip, role pill, 🟢🟡🔴⚫ status badges, last login), "Add Employee" form (name + position pills + role → auto temp password with copy), row actions behind re-auth modal, Developer console strip (lifecycle audit feed), new audit events wired (`SUSPEND_ACCOUNT`, `ACCOUNT_REACTIVATED`, `PASSWORD_RESET_INITIATED`, `ACCOUNT_UNLOCKED`, `LOGIN_IDENTIFIED`, `LOCKOUT_TRIGGERED`, `PROFILE_UPDATED`, `SESSION_KILLED_BY_DEACTIVATION`, `PASSWORD_FORCED_CHANGE_DONE`, `ACCOUNT_SCHEMA_V2`).
+- [x] **P6 — hardening**: global API limiter (300/15 min on `/api`), rolling cookie + `secure` in production, password policy (min 8 staff / 12 Admin+, letters+digit+symbol, never on login), bcrypt 10→12 (+ transparent legacy rehash on login), fallback passwords removed (env-only admin seed or generated secrets; nothing printed to console), requireAuth live-checks `is_active` so deactivation kills the session on the next request.
+- [x] **P5 — RBAC sweep**: `requireNonStaff`/`requireAdminOrAbove` applied to ~20 open routes; Staff keeps KPI/menu/wastage/closeout/inventory VIEW + promo verify-redeem + `/inventory/shipment` log only; audit-logs is Admin+.
+
+### 3.7 Blue testing checklist (do on blue deploy, during real shifts)
+- [ ] Owner/each person logs in with the Section-10 credentials and sets personal passwords.
+- [ ] Staff phone test: blocked from menu/settings/users (403), can log shipments + redeem promos + view KPIs.
+- [ ] Wrong-password ×5 on a test account → 15-min lock screen; manager unlocks via roster.
+- [ ] Add Employee → temp password copy → first-login forced change end-to-end.
+- [ ] Deactivate + reactivate a real leaver/returner; verify their session dies instantly.
+- [ ] Blue DB note: blue seeds its OWN database — its account codes/temp passwords get generated on first boot; capture them into a fresh copy of securityplan.md §10 table before handing out.

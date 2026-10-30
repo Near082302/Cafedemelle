@@ -936,6 +936,42 @@ select:focus,
 .badge-owner { background-color: rgba(212, 168, 79, 0.2); color: var(--chocolate); padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 0.8rem; border: 1px solid var(--gold); }
 .badge-dev { background-color: rgba(0, 75, 0, 0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 0.8rem; border: 1px solid var(--primary); }
 
+/* ===========================================================================
+   PART 3 — SECURITY PLAN: roster avatar chips + account status badges
+   =========================================================================== */
+.avatar-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    margin-right: 8px;
+    vertical-align: middle;
+    box-shadow: 0 2px 4px rgba(0, 75, 0, 0.25);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.78rem;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.status-active { background-color: #ecf3ea; color: #2e6b2e; border-color: #cfe0cc; }
+.status-temp { background-color: #fdf6e3; color: #8a6d1a; border-color: #ecd9a0; }
+.status-locked { background-color: #fde8e8; color: #a32222; border-color: #f0c2c2; }
+.status-inactive { background-color: #ececec; color: #555; border-color: #d5d5d5; }
+
 .status-msg { padding: 12px; border-radius: 8px; margin-top: 15px; font-weight: 700; display: none; box-sizing: border-box; width: 100%; max-width: 100%; }
 .status-msg.success { background-color: rgba(46, 125, 50, 0.15); color: var(--success); border: 1px solid var(--success); display: block; }
 .status-msg.error { background-color: rgba(198, 40, 40, 0.15); color: var(--danger); border: 1px solid var(--danger); display: block; }
@@ -1561,10 +1597,18 @@ select:focus,
     #menu-table-body td:nth-child(7)::before { content: "Views:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #menu-table-body td:nth-child(8)::before { content: "Actions:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
 
-    #users-table-body td:nth-child(1)::before { content: "Role ID:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #users-table-body td:nth-child(2)::before { content: "Username:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #users-table-body td:nth-child(3)::before { content: "Role:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
-    #users-table-body td:nth-child(4)::before { content: "Action:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(1)::before { content: "Employee:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(2)::before { content: "Account Code:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(3)::before { content: "Position:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(4)::before { content: "Role:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(5)::before { content: "Status:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(6)::before { content: "Last Login:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #users-table-body td:nth-child(7)::before { content: "Action:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+
+    /* Developer Console — deep audit strip (3 columns) */
+    #dev-security-log-body td:nth-child(1)::before { content: "Timestamp:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #dev-security-log-body td:nth-child(2)::before { content: "Event:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
+    #dev-security-log-body td:nth-child(3)::before { content: "Details:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
 
     #audit-table-body td:nth-child(1)::before { content: "Timestamp:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
     #audit-table-body td:nth-child(2)::before { content: "Action Event:"; font-weight: 700; color: var(--primary); text-align: left; margin-right: 10px; }
@@ -1810,26 +1854,28 @@ select:focus,
    =========================================================================== */
 .pill-btn-group {
     display: flex;
-    flex-direction: column; /* Stack vertically on mobile */
+    flex-direction: row; /* Side-by-side on desktop */
+    align-items: center;
     gap: 8px;
     width: 100%;
-    margin-top: 6px;
-    margin-bottom: 12px;
+    box-sizing: border-box;
+    flex-wrap: nowrap; /* Prevent messy internal breaking */
 }
 
 .pill-btn-group .pill-btn {
-    width: 100%;
+    flex: 1; /* Distributes space evenly across the available form column */
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 16px;
-    font-size: 0.9rem;
+    padding: 8px 10px;
+    font-size: 0.82rem;
     font-weight: 600;
     border-radius: 20px;
     border: 1.5px solid var(--secondary);
     background-color: #ffffff;
     color: var(--text-dark);
     cursor: pointer;
+    white-space: nowrap; /* Keeps text on a single line inside each pill */
     box-sizing: border-box;
     transition: all 0.2s ease-in-out;
 }
@@ -1841,13 +1887,14 @@ select:focus,
     box-shadow: 0 2px 8px rgba(0, 75, 0, 0.18);
 }
 
-/* Desktop override: side-by-side */
-@media (min-width: 768px) {
+/* Mobile stack fallback for narrow screens (< 768px) */
+@media (max-width: 768px) {
     .pill-btn-group {
-        flex-direction: row;
+        flex-direction: column;
     }
     .pill-btn-group .pill-btn {
-        flex: 1;
+        width: 100%;
+        white-space: normal;
     }
 }
 
@@ -2027,4 +2074,84 @@ select:focus,
 
 @media (max-width: 768px) {
     .eod-stepper-btn { display: inline-flex; }
+}
+
+/* ===========================================================================
+   OPTION 1: COMPACT SUMMARY BADGE WITH MODAL/POP-OVER FOR LINKED MENU ITEMS
+   =========================================================================== */
+.linked-items-compact-dropdown {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.badge-count-pill {
+    background-color: var(--alt-bg) !important;
+    border: 1.5px solid var(--secondary) !important;
+    color: var(--primary) !important;
+    transition: var(--transition-smooth);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.badge-count-pill:hover {
+    background-color: var(--light-accent) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Mobile Responsiveness for Linked Items Badge */
+@media (max-width: 850px) {
+    #inventory-table-body td:nth-child(5)::before { 
+        content: "Linked Menu Items:"; 
+        font-weight: 700; 
+        color: var(--primary); 
+        text-align: left; 
+        margin-right: 10px; 
+    }
+    
+    .linked-items-compact-dropdown {
+        width: 100% !important;
+        text-align: right !important;
+    }
+    
+    .linked-items-compact-dropdown .dropdown-trigger {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+}
+
+/* ===========================================================================
+   SURGICAL FIX: DESKTOP TABLE VISIBILITY (PRESERVES MOBILE CARDS)
+   =========================================================================== */
+@media (min-width: 851px) {
+    #tab-inventory .table-responsive,
+    #tab-inventory .custom-table,
+    #tab-inventory tbody,
+    #tab-inventory tr,
+    #tab-inventory td {
+        display: revert !important;
+    }
+
+    #inventory-table-body {
+        display: table-row-group !important;
+    }
+
+    #inventory-table-body tr {
+        display: table-row !important;
+    }
+
+    #inventory-table-body td {
+        display: table-cell !important;
+    }
+}
+
+/* Ensure the modal popover doesn't swallow or obscure container views */
+.modal-overlay.active {
+    display: flex !important;
+    z-index: 10000 !important;
+}
+
+.modal-container {
+    max-height: 85vh;
+    overflow-y: auto;
 }

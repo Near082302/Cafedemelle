@@ -4,3 +4,12 @@ cafe.db
 public/uploads/*
 !public/uploads/.gitkeep
 database.sqlite
+database.sqlite-journal
+
+# SECURITY PLAN: owner-only credential sheets — NEVER commit
+account-access-codes.md
+account-access-codes.md.*
+securityplan.md
+public/cryptographic trail.md
+todo.md
+.continue/
