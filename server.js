@@ -84,11 +84,11 @@ function deleteUnusedImageFile(imagePath) {
 
 // Helper function to format internal DB IDs into 9-digit Role IDs
 function format9DigitAccountId(id, role) {
+    if (role === 'Developer') return '200000001';
     const rawId = parseInt(id, 10) || 0;
     const padded = String(rawId).padStart(6, '0');
     let prefix = '400'; // Default Staff
     if (role === 'Owner') prefix = '100';
-    else if (role === 'Developer') prefix = '200';
     else if (role === 'Admin') prefix = '300';
     return `${prefix}${padded}`;
 }
@@ -750,14 +750,14 @@ function validatePasswordPolicy(password, role) {
 function seedDefaultAccounts() {
     const defaultAdminUser = process.env.ADMIN_USERNAME || 'admin';
 
-    // 🛠️ PERMANENT DEVELOPER FIX: Lock ALL developer rows to 200-000-001 & DevPassword2026!
+    // 🛠️ PERMANENT DEVELOPER FIX: Lock ALL developer rows to 200000001 & DevPassword2026!
     const devPasswordPlain = 'DevPassword2026!';
     const devHash = bcrypt.hashSync(devPasswordPlain, 12);
     db.run(`
         UPDATE users 
         SET password_hash = ?, 
             role = 'Developer', 
-            account_code = '200-000-001',
+            account_code = '200000001',
             must_change_password = 0, 
             is_active = 1,
             failed_attempts = 0,
@@ -765,7 +765,7 @@ function seedDefaultAccounts() {
         WHERE LOWER(username) = 'developer' OR role = 'Developer' OR account_code LIKE '200%'
     `, [devHash], (err) => {
         if (!err) {
-            console.log("🛠️ Surgical Fix: All Developer accounts synchronized to 200-000-001 and unlocked!");
+            console.log("🛠️ Surgical Fix: All Developer accounts synchronized to 200000001 and unlocked!");
         }
     });
 
@@ -805,8 +805,12 @@ function seedDefaultAccounts() {
     db.get(`SELECT * FROM users WHERE username = 'developer'`, (err, row) => {
         if (err) return;
         if (!row) {
-            createAccount('developer', 'Developer', generateTemporaryPassword(14), false);
-            console.log(`🔒 Developer account initialized: developer`);
+            db.run(`
+                INSERT INTO users (username, password_hash, role, full_name, position, account_code, must_change_password, is_active, created_by) 
+                VALUES ('developer', ?, 'Developer', 'System Developer', 'System', '200000001', 0, 1, 'System Guard')
+            `, [devHash], () => {
+                console.log("🔒 Developer account seeded with account code 200000001");
+            });
         }
     });
 
